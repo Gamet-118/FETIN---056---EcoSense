@@ -1,1 +1,27 @@
+const int pinoSensor = 34; // GPIO 34 do ESP32
 
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  int maiorValor = 0;
+  int menorValor = 4095;
+
+  // Amostra o sinal por 20 milissegundos (um ciclo completo da rede elétrica de 60Hz)
+  unsigned long tempoInicio = millis();
+  while (millis() - tempoInicio < 20) {
+    int leitura = analogRead(pinoSensor);
+    
+    if (leitura > maiorValor) maiorValor = leitura;
+    if (leitura < menorValor) menorValor = leitura;
+  }
+
+  // A diferença entre o pico mais alto e o mais baixo indica a presença de corrente
+  int amplitude = maiorValor - menorValor;
+
+  Serial.print("Amplitude do Sinal: ");
+  Serial.println(amplitude);
+
+  delay(200); // Aguarda um pouco antes da próxima leitura
+}
