@@ -1,1 +1,37 @@
+ /*
+  Teste do Monitor Serial no Arduino Uno
+  - Envia mensagens periódicas para o PC
+  - Lê e exibe o que o usuário digitar no Monitor Serial
+*/
 
+void setup() {
+  // Inicializa a comunicação serial a 9600 bps
+  Serial.begin(9600);
+
+  // Aguarda a conexão (necessário em alguns casos, como Arduino Leonardo)
+  while (!Serial) {
+    ; // Espera até a porta serial estar pronta
+  }
+
+  Serial.println("=== Teste do Monitor Serial ===");
+  Serial.println("Digite algo e pressione Enter...");
+}
+
+void loop() {
+  // Envia uma mensagem a cada 1 segundo
+  static unsigned long ultimoEnvio = 0;
+  if (millis() - ultimoEnvio >= 1000) {
+    ultimoEnvio = millis();
+    Serial.print("Millis desde o inicio: ");
+    Serial.println(millis());
+  }
+
+  // Verifica se há dados recebidos
+  if (Serial.available() > 0) {
+    String recebido = Serial.readStringUntil('\n'); // Lê até Enter
+    recebido.trim(); // Remove espaços e quebras de linha extras
+
+    Serial.print("Você digitou: ");
+    Serial.println(recebido);
+  }
+}
