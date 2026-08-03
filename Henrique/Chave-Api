@@ -1,1 +1,92 @@
 AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug
+
+import serial
+import time
+import datetime
+from google import genai
+from google.types import GenerateContentConfig
+
+# ==========================================
+# CONFIGURAÇÕES INICIAIS
+# ==========================================
+
+# Configure a porta correta da sua Raspberry Pi (/dev/ttyUSB0 ou /dev/ttyACM0)
+PORTA_SERIAL = '/dev/ttyUSB0' 
+BAUD_RATE = 115200
+
+# Inicializa o cliente da API do Gemini
+client = genai.Client()
+
+# Inicializa a conexão Serial
+try:
+    ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=1)
+    print(f"Conectado com sucesso na porta {PORTA_SERIAL}")
+except Exception as e:
+    print(f"Erro ao abrir a porta serial {PORTA_SERIAL}: {e}")
+    print("O código continuará rodando em modo de simulação.")
+    ser = None
+
+# ==========================================
+# LOOP PRINCIPAL
+# ==========================================
+print("Iniciando monitoramento do EcoSense...")
+
+try:
+    while True:
+        dados_sensores = ""
+        
+        # 1. Leitura dos dados reais do ESP32
+        if ser and ser.in_waiting > 0:
+            try:
+                dados_sensores = ser.readline().decode('utf-8').strip()
+            except Exception as e:
+                print(f"Erro ao ler a serial: {e}")
+        
+        # Se não houver dados na serial (ou se estiver desconectado), usa uma simulação para testes
+        if not dados_sensores:
+            dados_sensores = "Luminosidade: Alta, Presenca: 1, Consumo: 450W"
+            print("\n[Modo Simulação] Usando dados fictícios para teste.")
+        else:
+            print(f"\n[Dados Recebidos]: {dados_sensores}")
+
+        # 2. Captura a hora atual da Raspberry Pi
+        hora_atual = datetime.datetime.now().strftime("%H:%M")
+        print(f"Horário atual do sistema: {hora_atual}")
+
+        # 3. Monta a instrução do sistema com o horário dinâmico
+        system_instruction = f"""
+        Você é o EcoSense, um assistente inteligente de eficiência energética para projetos de IoT.
+        O horário atual do sistema é: {hora_atual}.
+        Use essa informação de horário para dar dicas contextuais sobre o consumo de energia. 
+        Lembre-se:
+        - Horários de pico (ex: 18h às 21h) a tarifa de energia é muito mais cara.
+        - Horários diurnos são ideais para aproveitar a luz natural.
+        Seja curto, direto e dê apenas uma recomendação prática baseada nos dados dos sensores e na hora atual.
+        """
+
+        # 4. Envia os dados e o contexto para o Gemini
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=f"Dados atuais dos sensores: {dados_sensores}",
+                config=GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.7
+                )
+            )
+            
+            print("--- Dica do EcoSense ---")
+            print(response.text)
+            print("------------------------")
+            
+        except Exception as e:
+            print(f"Erro ao chamar a API do Gemini: {e}")
+
+        # 5. Aguarda 10 segundos antes da próxima leitura/análise
+        time.sleep(10)
+
+except KeyboardInterrupt:
+    print("\nPrograma encerrado pelo usuário.")
+    if ser:
+        ser.close()
+        print("Conexão serial fechada.")
