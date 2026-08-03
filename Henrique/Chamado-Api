@@ -1,7 +1,6 @@
 from google import genai
 
-# 1. Coloque a sua chave do Gemini aqui dentro das aspas
-MINHA_CHAVE_API = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
+CHAVE-API = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
 
 # Inicializa o cliente oficial do Gemini
 from google.genai import types
@@ -23,7 +22,7 @@ def gerar_dica_economia(historico_consumo):
     """
 
     try:
-        # Faz a chamada para o modelo rápido e gratuito 'gemini-1.5-flash'
+        # Faz a chamada para o modelo rápido e gratuito 'gemini-flash-latest'
         resposta = client.models.generate_content(
         model='gemini-flash-latest',
             contents=contexto_prompt,
@@ -35,7 +34,7 @@ def gerar_dica_economia(historico_consumo):
 
 
 # ==========================================
-# TESTE DE EXECUÇÃO DO SEU BACK-END
+#             TESTE DE EXECUÇÃO
 # ==========================================
 if __name__ == "__main__":
     print("Conectando à API do Gemini...\n")
