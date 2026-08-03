@@ -4,11 +4,14 @@ import serial
 import time
 import datetime
 from google import genai
-from google.types import GenerateContentConfig
 
 # ==========================================
 # CONFIGURAÇÕES INICIAIS
 # ==========================================
+
+# Mude aqui para forçar um horário nos testes (ex: "19:30" ou "12:00").
+# Deixe None (sem aspas) para usar o horário real da Raspberry Pi.
+HORARIO_TESTE = "19:30" 
 
 # Configure a porta correta da sua Raspberry Pi (/dev/ttyUSB0 ou /dev/ttyACM0)
 PORTA_SERIAL = '/dev/ttyUSB0' 
@@ -42,16 +45,20 @@ try:
             except Exception as e:
                 print(f"Erro ao ler a serial: {e}")
         
-        # Se não houver dados na serial (ou se estiver desconectado), usa uma simulação para testes
+        # Se não houver dados na serial, usa uma simulação para testes
         if not dados_sensores:
             dados_sensores = "Luminosidade: Alta, Presenca: 1, Consumo: 450W"
             print("\n[Modo Simulação] Usando dados fictícios para teste.")
         else:
             print(f"\n[Dados Recebidos]: {dados_sensores}")
 
-        # 2. Captura a hora atual da Raspberry Pi
-        hora_atual = datetime.datetime.now().strftime("%H:%M")
-        print(f"Horário atual do sistema: {hora_atual}")
+        # 2. Definição do Horário (Teste ou Real)
+        if HORARIO_TESTE:
+            hora_atual = HORARIO_TESTE
+            print(f"Horário de TESTE ativo: {hora_atual}")
+        else:
+            hora_atual = datetime.datetime.now().strftime("%H:%M")
+            print(f"Horário real do sistema: {hora_atual}")
 
         # 3. Monta a instrução do sistema com o horário dinâmico
         system_instruction = f"""
@@ -66,13 +73,14 @@ try:
 
         # 4. Envia os dados e o contexto para o Gemini
         try:
+            # Enviando a configuração diretamente no dicionário do 'config'
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=f"Dados atuais dos sensores: {dados_sensores}",
-                config=GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.7
-                )
+                config={
+                    'system_instruction': system_instruction,
+                    'temperature': 0.7
+                }
             )
             
             print("--- Dica do EcoSense ---")
@@ -82,7 +90,7 @@ try:
         except Exception as e:
             print(f"Erro ao chamar a API do Gemini: {e}")
 
-        # 5. Aguarda 10 segundos antes da próxima leitura/análise
+        # 5. Aguarda 10 segundos antes da próxima leitura
         time.sleep(10)
 
 except KeyboardInterrupt:
