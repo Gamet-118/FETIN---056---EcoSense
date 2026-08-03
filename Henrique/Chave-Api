@@ -5,21 +5,20 @@ import time
 import datetime
 from google import genai
 
-# ==========================================
-# CONFIGURAÇÕES INICIAIS
-# ==========================================
-
-# Mude aqui para forçar um horário nos testes (ex: "19:30" ou "12:00").
 # Deixe None (sem aspas) para usar o horário real da Raspberry Pi.
-HORARIO_TESTE = "19:30" 
+HORARIO_TESTE = "19:30"
 
-# Configure a porta correta da sua Raspberry Pi (/dev/ttyUSB0 ou /dev/ttyACM0)
+# (/dev/ttyUSB0 ou /dev/ttyACM0)
 PORTA_SERIAL = '/dev/ttyUSB0' 
 BAUD_RATE = 115200
 
 # Inicializa o cliente da API do Gemini
-client = genai.Client()
+client = genai.Client(api_key="AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug")
 
+#print("Modelos disponiveis: ")
+#for m in client.models.list():
+   # print(m.name)
+    
 # Inicializa a conexão Serial
 try:
     ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=1)
@@ -29,16 +28,14 @@ except Exception as e:
     print("O código continuará rodando em modo de simulação.")
     ser = None
 
-# ==========================================
 # LOOP PRINCIPAL
-# ==========================================
 print("Iniciando monitoramento do EcoSense...")
 
 try:
     while True:
         dados_sensores = ""
         
-        # 1. Leitura dos dados reais do ESP32
+        # 1. Leitura dos dados da ESP32
         if ser and ser.in_waiting > 0:
             try:
                 dados_sensores = ser.readline().decode('utf-8').strip()
@@ -75,7 +72,7 @@ try:
         try:
             # Enviando a configuração diretamente no dicionário do 'config'
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-flash-latest',
                 contents=f"Dados atuais dos sensores: {dados_sensores}",
                 config={
                     'system_instruction': system_instruction,
