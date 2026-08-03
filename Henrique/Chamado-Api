@@ -1,18 +1,16 @@
+import time
+import serial
 from google import genai
 
+# Configuração da API
 CHAVE_API = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
-
-# Inicializa o cliente oficial do Gemini
-from google.genai import types
-
 client = genai.Client(api_key=CHAVE_API, http_options={'headers': {'x-goog-api-key': CHAVE_API}})
 
+# AQUI ESTÁ A LINHA DA PORTA QUE A GENTE CONVERSOU:
+PORTA_SERIAL = '/dev/ttyUSB0' 
+BAUD_RATE = 115200
 
 def gerar_dica_economia(historico_consumo):
-    """
-    Função de Back-end que envia os dados do sensor para o Gemini
-    e retorna uma dica curta de economia para a tela do monitor.
-    """
     contexto_prompt = f"""
     Você é um assistente de casa inteligente focado em economia de energia.
     Analise o seguinte histórico de consumo de um aparelho na tomada de testes e dê uma dica de economia CURTA, DIRETA e HUMANIZADA (no máximo 2 linhas) para o usuário na feira de tecnologia.
@@ -20,29 +18,37 @@ def gerar_dica_economia(historico_consumo):
     Histórico de consumo enviado pelo sensor:
     {historico_consumo}
     """
-
     try:
-        # Faz a chamada para o modelo rápido e gratuito 'gemini-flash-latest'
+        # Atualizado para o modelo correto da biblioteca nova
         resposta = client.models.generate_content(
-        model='gemini-flash-latest',
+            model='gemini-2.5-flash',
             contents=contexto_prompt,
         )
         return resposta.text
     except Exception as e:
-        # Plano B caso falte internet ou dê erro na feira
-        return "Dica do momento: Evite manter aparelhos potentes ligados sem necessidade! (Erro de conexão)"
+        return "Dica do momento: Evite manter aparelhos potentes ligados sem necessidade!"
 
+# Inicializa a leitura do cabo USB
+try:
+    ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=1)
+    time.sleep(2) 
+    print("Conectado à ESP32 com sucesso! Aguardando dados...")
+except Exception as e:
+    print(f"Erro ao conectar na porta {PORTA_SERIAL}: {e}")
+    exit()
 
-# ==========================================
-#             TESTE DE EXECUÇÃO
-# ==========================================
-if __name__ == "__main__":
-    print("Conectando à API do Gemini...\n")
-
-    # Simulação 1: Picos de consumo (Secador)
-    dados_simulados_1 = "O consumo estava em 60W (lâmpada), mas disparou para 2100W às 14:00h."
-
-    print("--- TESTE 1: PICO DE ENERGIA ---")
-    resultado = gerar_dica_economia(dados_simulados_1)
-    print(resultado)
-    print("-" * 40)
+# Loop principal que fica lendo o cabo sem parar
+while True:
+    if ser.in_waiting > 0:
+        dados_esp = ser.readline().decode('utf-8', errors='ignore').strip()
+        
+        if dados_esp:
+            print(f"\n[ESP32] Enviou: {dados_esp}")
+            print("Solicitando dica ao Gemini...")
+            
+            dica = gerar_dica_economia(dados_esp)
+            
+            print(f"[Gemini]: {dica}")
+            print("-" * 50)
+            
+    time.sleep(0.5)
