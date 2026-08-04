@@ -7,7 +7,7 @@ from google import genai
 # CONFIGURAÇÕES
 # =====================================================
 
-API_KEY = "SUA_CHAVE_AQUI"
+API_KEY = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
 
 # Caminho do banco SQLite
 DB_PATH = "/home/pi/ProjetoEnergia/banco/energia.db"
