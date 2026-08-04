@@ -10,10 +10,10 @@ from google import genai
 API_KEY = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
 
 # Caminho do banco SQLite
-DB_PATH = "/home/pi/ProjetoEnergia/banco/energia.db"
+DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
 
 # Deixe None para usar o horário real
-HORARIO_TESTE = "19:30"
+HORARIO_TESTE = None
 
 # Inicializa o Gemini
 client = genai.Client(api_key=API_KEY)
@@ -131,7 +131,7 @@ Considere:
 
             response = client.models.generate_content(
 
-                model="gemini-2.5-flash",
+                model="gemini-flash-latest",
 
                 contents=f"""
 Analise esta medição elétrica:
