@@ -1,1 +1,164 @@
+import sqlite3
+import time
+import datetime
+from google import genai
 
+# =====================================================
+# CONFIGURAÇÕES
+# =====================================================
+
+API_KEY = "SUA_CHAVE_AQUI"
+
+# Caminho do banco SQLite
+DB_PATH = "/home/pi/ProjetoEnergia/banco/energia.db"
+
+# Deixe None para usar o horário real
+HORARIO_TESTE = "19:30"
+
+# Inicializa o Gemini
+client = genai.Client(api_key=API_KEY)
+
+# =====================================================
+# FUNÇÃO PARA LER A ÚLTIMA LEITURA DO BANCO
+# =====================================================
+
+def obter_ultima_leitura():
+
+    try:
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                corrente,
+                tensao,
+                potencia,
+                energia,
+                dispositivo,
+                data_hora
+            FROM leituras
+            ORDER BY id DESC
+            LIMIT 1
+        """)
+
+        resultado = cursor.fetchone()
+
+        conn.close()
+
+        return resultado
+
+    except Exception as e:
+
+        print(f"Erro ao acessar o banco: {e}")
+
+        return None
+
+
+# =====================================================
+# LOOP PRINCIPAL
+# =====================================================
+
+print("=========================================")
+print("EcoSense iniciado")
+print("Lendo dados do banco SQLite...")
+print("=========================================")
+
+try:
+
+    while True:
+
+        leitura = obter_ultima_leitura()
+
+        if leitura:
+
+            corrente, tensao, potencia, energia, dispositivo, data = leitura
+
+            dados_sensores = f"""
+Data/Hora: {data}
+Dispositivo: {dispositivo}
+Corrente: {corrente:.2f} A
+Tensão: {tensao:.2f} V
+Potência: {potencia:.2f} W
+Energia: {energia:.3f} kWh
+"""
+
+            print("\n===== Última leitura =====")
+            print(dados_sensores)
+
+        else:
+
+            print("\nNenhuma leitura encontrada no banco.")
+
+            dados_sensores = """
+Dispositivo: ESP32_01
+Corrente: 0 A
+Tensão: 220 V
+Potência: 0 W
+Energia: 0 kWh
+"""
+
+        # ---------------------------------------------
+
+        if HORARIO_TESTE is None:
+
+            hora_atual = datetime.datetime.now().strftime("%H:%M")
+
+        else:
+
+            hora_atual = HORARIO_TESTE
+
+        # ---------------------------------------------
+
+        system_instruction = f"""
+Você é o EcoSense, um assistente inteligente de eficiência energética.
+
+O horário atual é {hora_atual}.
+
+Baseie sua recomendação nos dados recebidos.
+
+Considere:
+
+- Horário de pico entre 18:00 e 21:00.
+- Incentive economia de energia.
+- Seja objetivo.
+- Responda em no máximo três frases.
+"""
+
+        # ---------------------------------------------
+
+        try:
+
+            response = client.models.generate_content(
+
+                model="gemini-2.5-flash",
+
+                contents=f"""
+Analise esta medição elétrica:
+
+{dados_sensores}
+""",
+
+                config={
+
+                    "system_instruction": system_instruction,
+
+                    "temperature": 0.7
+
+                }
+
+            )
+
+            print("\n========== EcoSense ==========")
+            print(response.text)
+            print("==============================\n")
+
+        except Exception as e:
+
+            print(f"Erro ao consultar o Gemini: {e}")
+
+        time.sleep(10)
+
+except KeyboardInterrupt:
+
+    print("\nPrograma encerrado.")
