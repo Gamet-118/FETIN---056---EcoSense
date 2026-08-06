@@ -1,0 +1,379 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  SafeAreaView,
+  Alert 
+} from 'react-native';
+
+// NOTA: Quando for integrar o Firebase real, você vai desmarcar as linhas abaixo:
+// import { initializeApp } from 'firebase/app';
+// import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+// import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
+
+export default function App() {
+  // Controle de Telas: 'login' | 'cadastro' | 'dashboard'
+  const [telaAtual, setTelaAtual] = useState('login');
+  
+  // Estados dos Formulários
+  const [nome, setNome] = useState('');
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+
+  // Estados da Telemetria do Sensor SCT-013
+  const [potencia, setPotencia] = useState(0);
+  const [corrente, setCorrente] = useState(0);
+  const [consumoAcumulado, setConsumoAcumulado] = useState(0);
+
+  // --- LÓGICA DE SIMULAÇÃO (MOCK) ---
+  // Enquanto o Firebase não está conectado, este hook simula o sensor rodando
+  useEffect(() => {
+    let ultimaAtualizacao = Date.now();
+
+    const intervalo = setInterval(() => {
+      if (telaAtual === 'dashboard') {
+        // Simula o ferro de solda ligando e desligando
+        const gerandoEnergia = Math.random() > 0.3;
+        const novaPotencia = gerandoEnergia ? (Math.random() * (55 - 42) + 42) : 0;
+        const novaCorrente = novaPotencia / 127;
+
+        // 1. Atualiza os dados instantâneos
+        setPotencia(novaPotencia);
+        setCorrente(novaCorrente);
+
+        // 2. Incrementa o consumo acumulado (kWh)
+        const agora = Date.now();
+        const decorridoHoras = (agora - ultimaAtualizacao) / (1000 * 60 * 60);
+        ultimaAtualizacao = agora;
+
+        if (novaPotencia > 0) {
+          const kwhNoPeriodo = (novaPotencia / 1000) * decorridoHoras;
+          setConsumoAcumulado(prev => prev + kwhNoPeriodo);
+        }
+      }
+    }, 2000); // Atualiza a cada 2 segundos igual ao Arduino
+
+    return () => clearInterval(intervalo);
+  }, [telaAtual]);
+
+
+  // =========================================================================
+  // DEPOIS, VOCÊ VAI ALTERAR ESTA FUNÇÃO PARA FAZER O LOGIN REAL NO FIREBASE
+  // =========================================================================
+  const handleLogin = () => {
+    if (!email || !senha) {
+      Alert.alert('Erro', 'Preencha todos os campos!');
+      return;
+    }
+    // Firebase Real seria: signInWithEmailAndPassword(auth, email, senha)...
+    setTelaAtual('dashboard');
+  };
+
+  // =========================================================================
+  // DEPOIS, VOCÊ VAI ALTERAR ESTA FUNÇÃO PARA FAZER O CADASTRO NO FIREBASE
+  // =========================================================================
+  const handleCadastro = () => {
+    if (!nome || !email || !senha) {
+      Alert.alert('Erro', 'Preencha todos os campos!');
+      return;
+    }
+    // Firebase Real seria: createUserWithEmailAndPassword(auth, email, senha)...
+    Alert.alert('Sucesso', 'Conta criada com sucesso!');
+    setTelaAtual('login');
+  };
+
+  const handleLogout = () => {
+    setTelaAtual('login');
+    setEmail('');
+    setSenha('');
+    setNome('');
+  };
+
+  // --- RENDERIZAÇÃO DAS TELAS ---
+  return (
+    <SafeAreaView style={styles.container}>
+      
+      {/* TELA DE LOGIN */}
+      {telaAtual === 'login' && (
+        <View style={styles.authContainer}>
+          <Text style={styles.logoText}>⚡ Eco Sense</Text>
+          <Text style={styles.subtecText}>Monitoramento de Energia</Text>
+
+          <TextInput 
+            style={styles.input} 
+            placeholder="E-mail" 
+            placeholderTextColor="#64748b"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Senha" 
+            placeholderTextColor="#64748b"
+            secureTextEntry
+            value={senha}
+            onChangeText={setSenha}
+          />
+
+          <TouchableOpacity style={styles.button} onPress={handleLogin}>
+            <Text style={styles.buttonText}>Entrar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setTelaAtual('cadastro')}>
+            <Text style={styles.linkText}>Não tem conta? Cadastre-se</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* TELA DE CADASTRO */}
+      {telaAtual === 'cadastro' && (
+        <View style={styles.authContainer}>
+          <Text style={styles.titleText}>Criar Conta</Text>
+
+          <TextInput 
+            style={styles.input} 
+            placeholder="Nome Completo" 
+            placeholderTextColor="#64748b"
+            value={nome}
+            onChangeText={setNome}
+          />
+          <TextInput 
+            style={styles.input} 
+            placeholder="E-mail" 
+            placeholderTextColor="#64748b"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Sua Senha" 
+            placeholderTextColor="#64748b"
+            secureTextEntry
+            value={senha}
+            onChangeText={setSenha}
+          />
+
+          <TouchableOpacity style={styles.button} onPress={handleCadastro}>
+            <Text style={styles.buttonText}>Finalizar Cadastro</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setTelaAtual('login')}>
+            <Text style={styles.linkText}>Já tem conta? Volte ao Login</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* DASHBOARD PRINCIPAL (MOBILE) */}
+      {telaAtual === 'dashboard' && (
+        <View style={styles.dashboardContainer}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>⚡ ECO SENSE</Text>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+              <Text style={styles.logoutText}>Sair</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.scrollContainer}>
+            {/* CARD POTENCIA */}
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>POTÊNCIA INSTANTÂNEA</Text>
+              <Text style={styles.cardValue}>
+                {potencia.toFixed(1)} <Text style={styles.unitText}>W</Text>
+              </Text>
+              <Text style={styles.cardSubText}>Corrente: {corrente.toFixed(2)} A</Text>
+            </View>
+
+            {/* CARD ACUMULADO */}
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>CONSUMO ACUMULADO</Text>
+              <Text style={[styles.cardValue, { color: '#3b82f6' }]}>
+                {consumoAcumulado.toFixed(4)} <Text style={styles.unitText}>kWh</Text>
+              </Text>
+              <Text style={styles.cardSubText}>Base de cálculo: Rede de 127V</Text>
+            </View>
+
+            {/* STATUS DO HARDWARE */}
+            <View style={styles.cardStatus}>
+              <Text style={styles.statusLabel}>Status do Ferro de Solda:</Text>
+              <Text style={[styles.statusValue, { color: potencia > 5 ? '#f59e0b' : '#94a3b8' }]}>
+                {potencia > 5 ? '🔥 Aquecendo / Ativo' : '💤 Desligado'}
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* Tab Bar Inferior Simulada */}
+          <View style={styles.tabBar}>
+            <Text style={styles.tabItemActive}>📊 Monitor</Text>
+            <TouchableOpacity onPress={() => Alert.alert('Ajustes do TC', 'Resistor: 330Ω\nCalibração: 6.0606')}>
+              <Text style={styles.tabItem}>⚙️ Ajustes</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+    </SafeAreaView>
+  );
+}
+
+// --- ESTILIZAÇÃO COMPATÍVEL COM CELULAR (CSS-in-JS) ---
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a', // Slate 900
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+  },
+  logoText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  subtecText: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 40,
+  },
+  titleText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  input: {
+    backgroundColor: '#1e293b',
+    color: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  button: {
+    backgroundColor: '#f59e0b', // Amber 500
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonText: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  linkText: {
+    color: '#f59e0b',
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 14,
+  },
+  dashboardContainer: {
+    flex: 1,
+  },
+  header: {
+    height: 60,
+    backgroundColor: '#020617',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'between',
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderColor: '#1e293b',
+  },
+  headerTitle: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  logoutBtn: {
+    padding: 8,
+  },
+  logoutText: {
+    color: '#f43f5e',
+    fontWeight: '600',
+  },
+  scrollContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  card: {
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  cardLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  cardValue: {
+    fontSize: 36,
+    fontWeight: '900',
+    color: '#fff',
+    marginTop: 10,
+  },
+  unitText: {
+    fontSize: 18,
+    fontWeight: 'normal',
+  },
+  cardSubText: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  cardStatus: {
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  statusLabel: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  statusValue: {
+    fontWeight: 'bold',
+  },
+  tabBar: {
+    height: 65,
+    backgroundColor: '#020617',
+    borderTopWidth: 1,
+    borderColor: '#1e293b',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  tabItemActive: {
+    color: '#2aa861',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  tabItem: {
+    color: '#64748b',
+    fontSize: 12,
+  }
+});
