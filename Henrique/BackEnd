@@ -7,10 +7,9 @@ from google.genai import types
 # =====================================================
 # CONFIGURAÇÕES
 # =====================================================
-API_KEY = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
+API_KEY = "SUA_CHAVE_API_AQUI"
 DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
 
-# Deixe None para usar o horário real da Raspberry
 HORARIO_TESTE = None 
 
 client = genai.Client(api_key=API_KEY)
@@ -54,7 +53,6 @@ try:
     while True:
         leitura = obter_ultima_leitura()
 
-        # Determina a hora atual
         if HORARIO_TESTE is None:
             hora_atual = datetime.datetime.now().strftime("%H:%M:%S")
         else:
@@ -89,34 +87,39 @@ Energia: 0.000 kWh
 
         system_instruction = f"""
 Você é o EcoSense, um assistente inteligente de eficiência energética.
-O horário atual é {hora_atual}.
+Momento da análise: {hora_atual}.
 
 Diretrizes:
-* Horário de pico: entre 18:00 e 21:00.
-* Incentive economia de energia com base na potência/corrente.
-* Seja objetivo.
-* Responda em no máximo três frases.
-* Mencione a hora atual ({hora_atual}).
+- O horário de referência para a economia é AGORA ({hora_atual}).
+- O horário de pico tarifário é entre 18:00 e 21:00. Considere pico APENAS se {hora_atual} estiver nessa faixa.
+- Responda em no máximo duas frases objetivas e diretas.
+- Não mencione o timestamp da leitura do sensor se for antigo, apenas a medição elétrica atual.
 """
 
-        try:
-            response = client.models.generate_content(
-                model="gemini-flash-latest",
-                contents=f"Analise esta medição elétrica:\n{dados_sensores}",
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.7
+        # PASSO 2: Chamada com 3 tentativas automáticas
+        resposta_texto = None
+        for tentativa in range(3):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-flash-latest",
+                    contents=f"Analise esta medição elétrica:\n{dados_sensores}",
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=0.4
+                    )
                 )
-            )
+                resposta_texto = response.text
+                break
+            except Exception:
+                time.sleep(2)
 
+        if resposta_texto:
             print("\n========== EcoSense ==========")
-            print(response.text)
+            print(resposta_texto)
             print("==============================\n")
+        else:
+            print("\n[Aviso] Falha temporária de conexão com a API.")
 
-        except Exception as e:
-            print(f"Erro na API (verifique limite/conexão): {e}")
-
-        # Intervalo de 30 segundos para evitar sobrecarga (erro 429) no plano gratuito
         time.sleep(30)
 
 except KeyboardInterrupt:
