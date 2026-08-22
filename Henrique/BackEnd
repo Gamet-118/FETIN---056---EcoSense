@@ -110,7 +110,8 @@ Diretrizes:
                 )
                 resposta_texto = response.text
                 break
-            except Exception:
+            except Exception as e:
+                print(f"[log Erro API]: {e}")
                 time.sleep(2)
 
         if resposta_texto:
