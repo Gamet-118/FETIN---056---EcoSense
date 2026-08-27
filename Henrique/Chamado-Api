@@ -1,15 +1,36 @@
 import serial
 
-# Verifique se a ESP32 está na /dev/ttyUSB0 ou /dev/ttyACM0
-porta = '/dev/ttyUSB0' 
+porta = '/dev/ttyUSB0'
 
 try:
     esp = serial.Serial(porta, 115200, timeout=1)
     print(f"Lendo dados em tempo real da ESP32 em {porta}...")
+    
     while True:
         if esp.in_waiting > 0:
             linha = esp.readline().decode('utf-8', errors='ignore').strip()
             if linha:
-                print(f"Dado direto da ESP32: {linha}")
+                partes = linha.split(',')
+                
+                # Verifica se a linha recebida tem todos os 5 campos esperados
+                if len(partes) == 5:
+                    try:
+                        corrente = float(partes[0])
+                        tensao = float(partes[1])
+                        potencia = float(partes[2])
+                        energia = float(partes[3])
+                        dispositivo = partes[4]
+
+                        # Filtro de ruído: se a corrente for insignificante, zera
+                        if corrente < 0.15:
+                            corrente = 0.0
+                            potencia = 0.0
+
+                        print(f"Dispositivo: {dispositivo} | Corrente: {corrente:.2f} A | Potência: {potencia:.2f} W | Energia: {energia:.4f} kWh")
+                    except ValueError:
+                        print(f"Linha corrompida ignorada: {linha}")
+                else:
+                    print(f"Formato inesperado: {linha}")
+
 except Exception as e:
     print(f"Erro ao abrir serial ({porta}): {e}")
