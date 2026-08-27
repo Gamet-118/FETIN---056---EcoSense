@@ -1,10 +1,13 @@
 import serial
 
-porta = '/dev/ttyUSB0'
+porta = '/dev/ttyUSB0' # ou '/dev/ttyACM0'
+
+# Valor médio de ruído com a lâmpada desligada
+OFFSET_RUIDO = 0.78 
 
 try:
     esp = serial.Serial(porta, 115200, timeout=1)
-    print(f"Lendo dados em tempo real da ESP32 em {porta}...")
+    print(f"Lendo dados calibrados em tempo real de {porta}...")
     
     while True:
         if esp.in_waiting > 0:
@@ -12,23 +15,28 @@ try:
             if linha:
                 partes = linha.split(',')
                 
-                # Verifica se a linha recebida tem todos os 5 campos esperados
                 if len(partes) == 5:
                     try:
-                        corrente = float(partes[0])
+                        corrente_bruta = float(partes[0])
                         tensao = float(partes[1])
-                        potencia = float(partes[2])
                         energia = float(partes[3])
                         dispositivo = partes[4]
 
-                        # Filtro de ruído: se a corrente for insignificante, zera
-                        if corrente < 0.15:
-                            corrente = 0.0
-                            potencia = 0.0
+                        # --- ALTERNATIVA 2 APLICADA AQUI ---
+                        # Se a corrente lida for menor ou igual ao ruído, consideramos 0
+                        if corrente_bruta <= (OFFSET_RUIDO + 0.05):
+                            corrente_real = 0.0
+                        else:
+                            corrente_real = corrente_bruta - OFFSET_RUIDO
 
-                        print(f"Dispositivo: {dispositivo} | Corrente: {corrente:.2f} A | Potência: {potencia:.2f} W | Energia: {energia:.4f} kWh")
+                        # Recalcula a potência com a corrente tratada
+                        potencia_real = corrente_real * tensao
+                        # -----------------------------------
+
+                        print(f"Dispositivo: {dispositivo} | Corrente Real: {corrente_real:.2f} A | Potência Real: {potencia_real:.2f} W | Energia: {energia:.4f} kWh")
+                    
                     except ValueError:
-                        print(f"Linha corrompida ignorada: {linha}")
+                        print(f"Linha corrompida: {linha}")
                 else:
                     print(f"Formato inesperado: {linha}")
 
