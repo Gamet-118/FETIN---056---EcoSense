@@ -1,54 +1,15 @@
-import time
 import serial
-from google import genai
 
-# Configuração da API
-CHAVE_API = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
-client = genai.Client(api_key=CHAVE_API, http_options={'headers': {'x-goog-api-key': CHAVE_API}})
+# Verifique se a ESP32 está na /dev/ttyUSB0 ou /dev/ttyACM0
+porta = '/dev/ttyUSB0' 
 
-# AQUI ESTÁ A LINHA DA PORTA QUE A GENTE CONVERSOU:
-PORTA_SERIAL = '/dev/ttyUSB0' 
-BAUD_RATE = 115200
-
-def gerar_dica_economia(historico_consumo):
-    contexto_prompt = f"""
-    Você é um assistente de casa inteligente focado em economia de energia.
-    Analise o seguinte histórico de consumo de um aparelho na tomada de testes e dê uma dica de economia CURTA, DIRETA e HUMANIZADA (no máximo 2 linhas) para o usuário na feira de tecnologia.
-
-    Histórico de consumo enviado pelo sensor:
-    {historico_consumo}
-    """
-    try:
-        # Atualizado para o modelo correto da biblioteca nova
-        resposta = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=contexto_prompt,
-        )
-        return resposta.text
-    except Exception as e:
-        return "Dica do momento: Evite manter aparelhos potentes ligados sem necessidade!"
-
-# Inicializa a leitura do cabo USB
 try:
-    ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=1)
-    time.sleep(2) 
-    print("Conectado à ESP32 com sucesso! Aguardando dados...")
+    esp = serial.Serial(porta, 115200, timeout=1)
+    print(f"Lendo dados em tempo real da ESP32 em {porta}...")
+    while True:
+        if esp.in_waiting > 0:
+            linha = esp.readline().decode('utf-8', errors='ignore').strip()
+            if linha:
+                print(f"Dado direto da ESP32: {linha}")
 except Exception as e:
-    print(f"Erro ao conectar na porta {PORTA_SERIAL}: {e}")
-    exit()
-
-# Loop principal que fica lendo o cabo sem parar
-while True:
-    if ser.in_waiting > 0:
-        dados_esp = ser.readline().decode('utf-8', errors='ignore').strip()
-        
-        if dados_esp:
-            print(f"\n[ESP32] Enviou: {dados_esp}")
-            print("Solicitando dica ao Gemini...")
-            
-            dica = gerar_dica_economia(dados_esp)
-            
-            print(f"[Gemini]: {dica}")
-            print("-" * 50)
-            
-    time.sleep(0.5)
+    print(f"Erro ao abrir serial ({porta}): {e}")
