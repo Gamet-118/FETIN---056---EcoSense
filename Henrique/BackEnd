@@ -7,7 +7,7 @@ from google.genai import types
 # =====================================================
 # CONFIGURAÇÕES
 # =====================================================
-API_KEY = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
+API_KEY = "AQ.Ab8RN6JVyEBwNiI6LcI2SCQw0pvt_1twQwBPZHWAb6IMcSpWYw"
 DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
 
 HORARIO_TESTE = None 
