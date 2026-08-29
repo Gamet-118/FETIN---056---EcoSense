@@ -1,164 +1,148 @@
+import serial
 import sqlite3
 import time
 import datetime
-from google import genai
 
 # =====================================================
 # CONFIGURAÇÕES
 # =====================================================
-
-API_KEY = "AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug"
-
-# Caminho do banco SQLite
+PORTA_SERIAL = "/dev/ttyUSB0"   # No Raspberry Pi costuma ser /dev/ttyUSB0 ou /dev/ttyACM0
+                                  # (no Windows seria "COM3", como no seu app.py)
+BAUD_RATE = 9600                 # Precisa ser IGUAL à velocidade configurada no código do ESP32
 DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
-
-# Deixe None para usar o horário real
-HORARIO_TESTE = None
-
-# Inicializa o Gemini
-client = genai.Client(api_key=API_KEY)
+NOME_DISPOSITIVO = "ESP32_01"
 
 # =====================================================
-# FUNÇÃO PARA LER A ÚLTIMA LEITURA DO BANCO
+# CONEXÃO COM O BANCO
 # =====================================================
+def conectar_banco():
+    """Abre uma conexão com o banco e garante que a tabela exista."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS leituras (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            corrente REAL NOT NULL,
+            tensao REAL NOT NULL,
+            potencia REAL NOT NULL,
+            energia REAL NOT NULL,
+            dispositivo TEXT NOT NULL,
+            data_hora TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
 
-def obter_ultima_leitura():
 
-    try:
+def salvar_leitura(conn, corrente, tensao, potencia, energia_incremental):
+    """Grava uma nova linha na tabela leituras."""
+    cursor = conn.cursor()
+    data_hora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO leituras (corrente, tensao, potencia, energia, dispositivo, data_hora)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (corrente, tensao, potencia, energia_incremental, NOME_DISPOSITIVO, data_hora))
+    conn.commit()  # ESSENCIAL: sem isso, nada é realmente salvo no arquivo do banco
 
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT
-                corrente,
-                tensao,
-                potencia,
-                energia,
-                dispositivo,
-                data_hora
-            FROM leituras
-            ORDER BY id DESC
-            LIMIT 1
-        """)
+# =====================================================
+# CONEXÃO COM A PORTA SERIAL (com tentativas automáticas)
+# =====================================================
+def conectar_serial():
+    """Tenta abrir a porta serial. Se falhar, tenta de novo a cada 5 segundos."""
+    while True:
+        try:
+            ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
+            print(f"Conectado à porta serial {PORTA_SERIAL} ({BAUD_RATE} bps)")
+            return ser
+        except Exception as e:
+            print(f"[Erro] Não foi possível abrir a porta serial: {e}")
+            print("Tentando novamente em 5 segundos...")
+            time.sleep(5)
 
-        resultado = cursor.fetchone()
 
-        conn.close()
-
-        return resultado
-
-    except Exception as e:
-
-        print(f"Erro ao acessar o banco: {e}")
-
-        return None
+# =====================================================
+# INTERPRETAÇÃO DA LINHA RECEBIDA DO ESP32
+# =====================================================
+# ATENÇÃO: esta função depende do formato exato que o ESP32 envia.
+# Aqui estou assumindo que o ESP32 manda uma linha de texto simples,
+# separada por vírgula, no formato:
+#
+#     corrente,tensao
+#
+# Exemplo de linha real recebida: "2.53,219.80"
+#
+# Se o seu ESP32 manda em outro formato (JSON, só a corrente, com
+# outro separador, etc.), é só ajustar a lógica AQUI DENTRO — o resto
+# do script (banco, cálculo de energia, loop principal) não muda.
+def interpretar_linha(linha):
+    partes = linha.strip().split(",")
+    if len(partes) < 2:
+        raise ValueError(f"Linha em formato inesperado: '{linha}'")
+    corrente = float(partes[0])
+    tensao = float(partes[1])
+    return corrente, tensao
 
 
 # =====================================================
 # LOOP PRINCIPAL
 # =====================================================
+def main():
+    print("=========================================")
+    print("EcoSense — Coletor de leituras iniciado")
+    print("=========================================")
 
-print("=========================================")
-print("EcoSense iniciado")
-print("Lendo dados do banco SQLite...")
-print("=========================================")
+    conn = conectar_banco()
+    ser = conectar_serial()
 
-try:
+    # Guarda o horário da última leitura válida, pra calcular quanto
+    # tempo passou entre uma leitura e outra (necessário pra estimar
+    # a energia consumida nesse intervalo, em kWh)
+    horario_ultima_leitura = time.time()
 
-    while True:
+    try:
+        while True:
+            try:
+                linha_bruta = ser.readline().decode("utf-8", errors="ignore")
 
-        leitura = obter_ultima_leitura()
+                # Se a serial não mandou nada nesse intervalo (linha vazia),
+                # simplesmente tenta de novo no próximo ciclo
+                if not linha_bruta.strip():
+                    continue
 
-        if leitura:
+                corrente, tensao = interpretar_linha(linha_bruta)
+                potencia = corrente * tensao  # P = V * I, em Watts
 
-            corrente, tensao, potencia, energia, dispositivo, data = leitura
+                # ---- Cálculo da energia consumida neste intervalo ----
+                agora = time.time()
+                intervalo_horas = (agora - horario_ultima_leitura) / 3600
+                energia_incremental = (potencia * intervalo_horas) / 1000  # Wh -> kWh
+                horario_ultima_leitura = agora
 
-            dados_sensores = f"""
-Data/Hora: {data}
-Dispositivo: {dispositivo}
-Corrente: {corrente:.2f} A
-Tensão: {tensao:.2f} V
-Potência: {potencia:.2f} W
-Energia: {energia:.3f} kWh
-"""
+                salvar_leitura(conn, corrente, tensao, potencia, energia_incremental)
 
-            print("\n===== Última leitura =====")
-            print(dados_sensores)
+                print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] "
+                      f"Corrente: {corrente:.2f} A | Tensão: {tensao:.2f} V | "
+                      f"Potência: {potencia:.2f} W | Energia: {energia_incremental:.5f} kWh")
 
-        else:
+            except ValueError as e:
+                # Linha veio corrompida ou em formato errado — ignora e segue,
+                # sem derrubar o programa por causa de UMA leitura ruim
+                print(f"[Aviso] Leitura ignorada: {e}")
 
-            print("\nNenhuma leitura encontrada no banco.")
+            except serial.SerialException as e:
+                # Perdeu a conexão com a porta serial (ex: cabo desconectado)
+                print(f"[Erro] Conexão serial perdida: {e}")
+                ser.close()
+                ser = conectar_serial()  # tenta reconectar automaticamente
 
-            dados_sensores = """
-Dispositivo: ESP32_01
-Corrente: 0 A
-Tensão: 220 V
-Potência: 0 W
-Energia: 0 kWh
-"""
+    except KeyboardInterrupt:
+        print("\nColetor encerrado manualmente.")
 
-        # ---------------------------------------------
+    finally:
+        ser.close()
+        conn.close()
 
-        if HORARIO_TESTE is None:
 
-            hora_atual = datetime.datetime.now().strftime("%H:%M")
-
-        else:
-
-            hora_atual = HORARIO_TESTE
-
-        # ---------------------------------------------
-
-        system_instruction = f"""
-Você é o EcoSense, um assistente inteligente de eficiência energética.
-
-O horário atual é {hora_atual}.
-
-Baseie sua recomendação nos dados recebidos.
-
-Considere:
-
-- Horário de pico entre 18:00 e 21:00.
-- Incentive economia de energia.
-- Seja objetivo.
-- Responda em no máximo três frases.
-"""
-
-        # ---------------------------------------------
-
-        try:
-
-            response = client.models.generate_content(
-
-                model="gemini-flash-latest",
-
-                contents=f"""
-Analise esta medição elétrica:
-
-{dados_sensores}
-""",
-
-                config={
-
-                    "system_instruction": system_instruction,
-
-                    "temperature": 0.7
-
-                }
-
-            )
-
-            print("\n========== EcoSense ==========")
-            print(response.text)
-            print("==============================\n")
-
-        except Exception as e:
-
-            print(f"Erro ao consultar o Gemini: {e}")
-
-        time.sleep(10)
-
-except KeyboardInterrupt:
-
-    print("\nPrograma encerrado.")
+if __name__ == "__main__":
+    main()
