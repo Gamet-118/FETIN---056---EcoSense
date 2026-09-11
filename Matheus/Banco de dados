@@ -65,6 +65,8 @@ def salvar_leitura(
     data_hora = datetime.datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+    
+    print("banco tentando salvar")
 
     cursor.execute("""
         INSERT INTO leituras
@@ -88,6 +90,8 @@ def salvar_leitura(
     ))
 
     conn.commit()
+    
+    print("salvou")
 
 
 # =====================================================
@@ -133,7 +137,7 @@ def interpretar_linha(linha):
 
     partes = linha.strip().split(",")
 
-    if len(partes) != 5:
+    if len(partes) != 4:
 
         raise ValueError(
             f"Formato inesperado: '{linha}'"
@@ -142,16 +146,10 @@ def interpretar_linha(linha):
     corrente_bruta = float(partes[0])
 
     tensao = float(partes[1])
+    
+    potencia_esp = float(partes[2])
 
-    # Campo 2 recebido do ESP32
-    # Não vamos utilizar neste momento
-    # potencia_esp = float(partes[2])
-
-    # Campo 3 recebido do ESP32
-    # Também não vamos utilizar
-    # energia_esp = float(partes[3])
-
-    dispositivo = partes[4]
+    dispositivo = partes[3]
 
     # =================================================
     # CORREÇÃO DO RUÍDO
@@ -206,6 +204,8 @@ def main():
                     "utf-8",
                     errors="ignore"
                 )
+                
+                print("DADO RECEBIDO: ",linha_bruta)
 
 
                 if not linha_bruta.strip():
