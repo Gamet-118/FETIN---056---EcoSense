@@ -1,42 +1,49 @@
-#include <Arduino.h>
-#include "EmonLib.h"
-
-EnergyMonitor SCT013;
-EnergyMonitor ZMPT101B;
-
-const int   pinSCT         = 34;
-const int   pinZMPT        = 35;
-const float calSCT         = 0.52;
-const float calZMPT        = 23220.0; // ajuste com multímetro de referência
-const float limiarCorrente = 0.17;
-
+/**
+ * This program shows you how to use the basics of this library.
+*/
+#include <SPI.h>              // include libraries
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <ZMPT101B.h>
+ 
+#define SENSITIVITY 500.0f
+ 
+// ZMPT101B sensor output connected to analog pin A0
+// and the voltage source frequency is 50 Hz.
+ZMPT101B voltageSensor(A0, 50.0);
+ 
+#define SCREEN_WIDTH 128 // ORelay display width, in pixels
+#define SCREEN_HEIGHT 64 // ORelay display height, in pixels
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define ORelay_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, ORelay_RESET);
+int buzzer=4;
 void setup() {
-    Serial.begin(115200);
-    analogReadResolution(10);
-    SCT013.current(pinSCT, calSCT);
-    ZMPT101B.voltage(pinZMPT, calZMPT, 1.7);
-    Serial.println("Sistema iniciado.");
+  Serial.begin(115200);
+  pinMode(buzzer,OUTPUT);
+  // Change the sensitivity value based on value you got from the calibrate
+  // example.
+  voltageSensor.setSensitivity(SENSITIVITY);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  delay(2000);
+  display.clearDisplay();
+  display.setTextColor(WHITE);
 }
-
+ 
 void loop() {
-    ZMPT101B.calcVI(20, 2000);
-    double Vrms = ZMPT101B.Vrms;
-
-    double Irms = SCT013.calcIrms(1480);
-    if (Irms < limiarCorrente) Irms = 0.0;
-
-    float potencia = Irms * Vrms;
-
-    Serial.print("Tensao   = ");
-    Serial.print(Vrms, 2);
-    Serial.println(" V");
-    Serial.print("Corrente = ");
-    Serial.print(Irms, 4);
-    Serial.println(" A");
-    Serial.print("Potencia = ");
-    Serial.print(potencia, 2);
-    Serial.println(" W");
-    Serial.println("----------------");
-
-    delay(2000);
+  // read the voltage and then print via Serial
+  float voltage = voltageSensor.getRmsVoltage();
+  Serial.println(voltage);
+display.clearDisplay();
+display.setCursor(10,0);  
+display.setTextSize(2);
+display.setTextColor(WHITE);
+display.print("Voltage");
+display.setCursor(10,25);  
+display.setTextSize(3);
+display.setTextColor(WHITE);
+display.print(String(voltage));
+display.display();
+  delay(1000);
 }
