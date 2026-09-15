@@ -1,36 +1,35 @@
- /*
-  Teste do Monitor Serial no Arduino Uno
-  - Envia mensagens periódicas para o PC
-  - Lê e exibe o que o usuário digitar no Monitor Serial
-*/
+#include <Arduino.h>
+#include "EmonLib.h"
+
+EnergyMonitor SCT013;
+const int   pinSCT         = 34;
+const float tensao         = 220.0;
+const float calSCT         = 19.44;
+const float limiarCorrente = 0.17;
 
 void setup() {
-  // Inicializa a comunicação serial a 9600 bps
-  Serial.begin(9600);
-
-  // Aguarda a conexão (necessário em alguns casos, como Arduino Leonardo)
-  while (!Serial) {
-    ; // Espera até a porta serial estar pronta
-  }
-
-  Serial.println("=== Teste do Monitor Serial ===");
-  Serial.println("Digite algo e pressione Enter...");
+    Serial.begin(115200);
+    analogReadResolution(10);
+    SCT013.current(pinSCT, calSCT);
+    Serial.println("Sistema iniciado.");
 }
 
 void loop() {
-  // Envia uma mensagem a cada 1 segundo
-  static unsigned long ultimoEnvio = 0;
-  if (millis() - ultimoEnvio >= 1000) {
-    ultimoEnvio = millis();
-    Serial.print("Millis desde o inicio: ");
-    Serial.println(millis());
-  }
+    double Irms = SCT013.calcIrms(1480);
+    if (Irms < limiarCorrente) Irms = 0.0;
 
-  // Verifica se há dados recebidos
-  if (Serial.available() > 0) {
-    String recebido = Serial.readStringUntil('\n'); // Lê até Enter
-    recebido.trim(); // Remove espaços e quebras de linha extras
+    float potencia = Irms * tensao;
 
+    Serial.print("Corrente = ");
+    Serial.print(Irms, 4);
+    Serial.println(" A");
+    Serial.print("Potencia = ");
+    Serial.print(potencia, 2);
+    Serial.println(" W");
+    Serial.println("----------------");
+
+    delay(2000);
+}
     Serial.print("Você digitou: ");
     Serial.println(recebido);
   }
