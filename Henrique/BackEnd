@@ -9,7 +9,7 @@ from google.genai import types
 # =====================================================
 API_KEY = "AQ.Ab8RN6JVyEBwNiI6LcI2SCQw0pvt_1twQwBPZHWAb6IMcSpWYw"
 DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
-
+ 
 HORARIO_TESTE = None 
 
 client = genai.Client(api_key=API_KEY)
