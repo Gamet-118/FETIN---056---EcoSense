@@ -3,6 +3,7 @@ import sqlite3
 import time
 import datetime
 
+
 # =====================================================
 # CONFIGURAÇÕES
 # =====================================================
@@ -13,12 +14,6 @@ BAUD_RATE = 115200
 DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
 
 NOME_DISPOSITIVO = "ESP32_01"
-
-# Ruído medido com a lâmpada desligada
-OFFSET_RUIDO = 0.78
-
-# Margem para evitar pequenas oscilações
-MARGEM_RUIDO = 0.05
 
 
 # =====================================================
@@ -65,8 +60,6 @@ def salvar_leitura(
     data_hora = datetime.datetime.now().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
-    
-    print("banco tentando salvar")
 
     cursor.execute("""
         INSERT INTO leituras
@@ -90,8 +83,6 @@ def salvar_leitura(
     ))
 
     conn.commit()
-    
-    print("salvou")
 
 
 # =====================================================
@@ -130,7 +121,7 @@ def conectar_serial():
 
 
 # =====================================================
-# INTERPRETAR DADOS DO ESP32
+# INTERPRETAR DADOS DA ESP32
 # =====================================================
 
 def interpretar_linha(linha):
@@ -143,35 +134,15 @@ def interpretar_linha(linha):
             f"Formato inesperado: '{linha}'"
         )
 
-    corrente_bruta = float(partes[0])
+    tensao = float(partes[0])
 
-    tensao = float(partes[1])
-    
-    potencia_esp = float(partes[2])
+    corrente = float(partes[1])
+
+    potencia = float(partes[2])
 
     dispositivo = partes[3]
 
-    # =================================================
-    # CORREÇÃO DO RUÍDO
-    # =================================================
-
-    if corrente_bruta <= (OFFSET_RUIDO + MARGEM_RUIDO):
-
-        corrente_real = 0.0
-
-    else:
-
-        corrente_real = corrente_bruta - OFFSET_RUIDO
-
-
-    # =================================================
-    # CÁLCULO DA POTÊNCIA
-    # =================================================
-
-    potencia = corrente_real * tensao
-
-
-    return corrente_real, tensao, potencia, dispositivo
+    return tensao, corrente, potencia, dispositivo
 
 
 # =====================================================
@@ -189,8 +160,6 @@ def main():
 
     ser = conectar_serial()
 
-
-    # Horário da primeira leitura
     horario_ultima_leitura = time.time()
 
 
@@ -200,26 +169,31 @@ def main():
 
             try:
 
+                # =====================================
+                # RECEBER DADO DA ESP32
+                # =====================================
+
                 linha_bruta = ser.readline().decode(
                     "utf-8",
                     errors="ignore"
-                )
-                
-                print("DADO RECEBIDO: ",linha_bruta)
+                ).strip()
 
 
-                if not linha_bruta.strip():
+                if not linha_bruta:
 
                     continue
 
 
+                print("DADO RECEBIDO:", linha_bruta)
+
+
                 # =====================================
-                # INTERPRETA DADOS
+                # INTERPRETAR DADOS
                 # =====================================
 
                 (
-                    corrente,
                     tensao,
+                    corrente,
                     potencia,
                     dispositivo
                 ) = interpretar_linha(linha_bruta)
@@ -259,14 +233,29 @@ def main():
                 # MOSTRAR NO TERMINAL
                 # =====================================
 
+                print("-----------------------------------------")
+
                 print(
-                    f"[{datetime.datetime.now().strftime('%H:%M:%S')}] "
-                    f"Dispositivo: {dispositivo} | "
-                    f"Corrente: {corrente:.2f} A | "
-                    f"Tensão: {tensao:.2f} V | "
-                    f"Potência: {potencia:.2f} W | "
-                    f"Energia: {energia_incremental:.5f} kWh"
+                    f"Tensão   : {tensao:.2f} V"
                 )
+
+                print(
+                    f"Corrente : {corrente:.4f} A"
+                )
+
+                print(
+                    f"Potência : {potencia:.2f} W"
+                )
+
+                print(
+                    f"Energia  : {energia_incremental:.6f} kWh"
+                )
+
+                print(
+                    f"Dispositivo: {dispositivo}"
+                )
+
+                print("-----------------------------------------")
 
 
             except ValueError as e:
