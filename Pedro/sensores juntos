@@ -1,42 +1,96 @@
 #include <Arduino.h>
+#include <ZMPT101B.h>
 #include "EmonLib.h"
 
-EnergyMonitor SCT013;
-EnergyMonitor ZMPT101B;
+// =====================================================
+// ZMPT101B - TENSÃO
+// =====================================================
 
-const int   pinSCT         = 34;
-const int   pinZMPT        = 35;
-const float calSCT         = 19.44;
-const float calZMPT        = 234.26; // ajuste com multímetro de referência
-const float limiarCorrente = 0.17;
+const int PIN_ZMPT = 34;
+
+const float SENSITIVITY = 140.67f;
+
+ZMPT101B voltageSensor(PIN_ZMPT, 60.0);
+
+
+// =====================================================
+// SCT013 - CORRENTE
+// =====================================================
+
+const int PIN_SCT = 32;
+
+const float CAL_SCT = 196;
+
+EnergyMonitor SCT013;
+
+
+// =====================================================
+// SETUP
+// =====================================================
 
 void setup() {
+
     Serial.begin(115200);
-    analogReadResolution(10);
-    SCT013.current(pinSCT, calSCT);
-    ZMPT101B.voltage(pinZMPT, calZMPT, 1.7);
-    Serial.println("Sistema iniciado.");
-}
 
-void loop() {
-    ZMPT101B.calcVI(20, 2000);
-    double Vrms = ZMPT101B.Vrms;
+    // ADC da ESP32 em 12 bits
+    analogReadResolution(12);
 
-    double Irms = SCT013.calcIrms(1480);
-    if (Irms < limiarCorrente) Irms = 0.0;
+    // Configuração/calibração do ZMPT101B
+    voltageSensor.setSensitivity(SENSITIVITY);
 
-    float potencia = Irms * Vrms;
-
-    Serial.print("Tensao   = ");
-    Serial.print(Vrms, 2);
-    Serial.println(" V");
-    Serial.print("Corrente = ");
-    Serial.print(Irms, 4);
-    Serial.println(" A");
-    Serial.print("Potencia = ");
-    Serial.print(potencia, 2);
-    Serial.println(" W");
-    Serial.println("----------------");
+    // Configuração/calibração do SCT013
+    SCT013.current(PIN_SCT, CAL_SCT);
 
     delay(2000);
+}
+
+
+// =====================================================
+// LOOP
+// =====================================================
+
+void loop() {
+
+    // =================================================
+    // MEDIR TENSÃO
+    // =================================================
+
+    float tensao = voltageSensor.getRmsVoltage();
+
+
+    // =================================================
+    // MEDIR CORRENTE
+    // =================================================
+
+    double corrente = SCT013.calcIrms(1480);
+
+
+    // =================================================
+    // CALCULAR POTÊNCIA
+    // =================================================
+
+    float potencia = tensao * corrente;
+
+
+    // =================================================
+    // ENVIAR DADOS PARA A RASPBERRY
+    // =================================================
+
+    Serial.print(tensao, 2);
+    Serial.print(",");
+
+    Serial.print(corrente, 4);
+    Serial.print(",");
+
+    Serial.print(potencia, 2);
+    Serial.print(",");
+
+    Serial.println("ESP32_01");
+
+
+    // =================================================
+    // AGUARDAR 1 SEGUNDO
+    // =================================================
+
+    delay(1000);
 }
