@@ -189,36 +189,38 @@
 </head>
 <body>
 
-  <!-- ============ LOGIN ============ -->
- <section id="screen-login" class="screen active full-center">
-  <div class="logo-circle">🌿</div>
-  <h1 class="brand-title">EcoSense</h1>
-  <p class="brand-sub">MONITOR DE ENERGIA</p>
-  
-  <form id="form-auth" class="login-card">
-    <div class="field">
-      <label>E-mail</label>
-      <input type="email" id="auth-email" placeholder="voce@email.com" required>
-    </div>
-    
-    <div class="field">
-      <label>Senha</label>
-      <input type="password" id="auth-senha" placeholder="••••••••" required>
-    </div>
+<!-- ============ LOGIN ============ -->
+  <section id="screen-login" class="screen active full-center">
+    <div class="logo-circle">🌿</div>
+    <h1 class="brand-title">EcoSense</h1>
+    <p class="brand-sub">MONITOR DE ENERGIA</p>
+    <form id="form-auth" class="login-card">
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="auth-email" placeholder="voce@email.com" required>
+      </div>
 
-    <div class="field" id="campo-cep" style="display: none;">
-      <label>CEP da Residência</label>
-      <input type="text" id="auth-cep" placeholder="37540-000" maxlength="9">
-    </div>
+      <div class="field">
+        <label>Senha</label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <input type="password" id="auth-senha" placeholder="••••••••" required style="padding-right: 42px;">
+          <span id="toggle-senha" style="position: absolute; right: 12px; cursor: pointer; user-select: none; font-size: 18px;">👁️</span>
+        </div>
+      </div>
 
-    <button class="btn-primary" id="btn-auth-submit" type="submit">Entrar</button>
-    
-    <p class="link-center">
-      <span id="auth-toggle-text">Não tem conta?</span> 
-      <b id="auth-toggle-btn" style="cursor: pointer; text-decoration: underline;">Cadastre-se</b>
-    </p>
-  </form>
-</section>
+      <div class="field" id="campo-cep" style="display: none;">
+        <label>CEP da Residência</label>
+        <input type="text" id="auth-cep" placeholder="37540-000" maxlength="9">
+      </div>
+
+      <button class="btn-primary" id="btn-auth-submit" type="submit">Entrar</button>
+      
+      <p class="link-center">
+        <span id="auth-toggle-text">Não tem conta?</span> 
+        <b id="auth-toggle-btn" style="cursor: pointer; text-decoration: underline;">Cadastre-se</b>
+      </p>
+    </form>
+  </section>
   <!-- ============ APP (site) ============ -->
   <div id="screen-app" class="screen">
     <nav class="navbar" id="navbar">
