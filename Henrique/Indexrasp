@@ -190,18 +190,35 @@
 <body>
 
   <!-- ============ LOGIN ============ -->
-  <section id="screen-login" class="screen active full-center">
-    <div class="logo-circle">🌿</div>
-    <h1 class="brand-title">EcoSense</h1>
-    <p class="brand-sub">MONITOR DE ENERGIA</p>
-    <form id="form-login" class="login-card">
-      <div class="field"><label>E-mail</label><input type="email" placeholder="voce@email.com" required></div>
-      <div class="field"><label>Senha</label><input type="password" placeholder="••••••••" required></div>
-      <button class="btn-primary" type="submit">Entrar</button>
-      <p class="link-center">Não tem conta? <b>Cadastre-se</b></p>
-    </form>
-  </section>
+ <section id="screen-login" class="screen active full-center">
+  <div class="logo-circle">🌿</div>
+  <h1 class="brand-title">EcoSense</h1>
+  <p class="brand-sub">MONITOR DE ENERGIA</p>
+  
+  <form id="form-auth" class="login-card">
+    <div class="field">
+      <label>E-mail</label>
+      <input type="email" id="auth-email" placeholder="voce@email.com" required>
+    </div>
+    
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="auth-senha" placeholder="••••••••" required>
+    </div>
 
+    <div class="field" id="campo-cep" style="display: none;">
+      <label>CEP da Residência</label>
+      <input type="text" id="auth-cep" placeholder="37540-000" maxlength="9">
+    </div>
+
+    <button class="btn-primary" id="btn-auth-submit" type="submit">Entrar</button>
+    
+    <p class="link-center">
+      <span id="auth-toggle-text">Não tem conta?</span> 
+      <b id="auth-toggle-btn" style="cursor: pointer; text-decoration: underline;">Cadastre-se</b>
+    </p>
+  </form>
+</section>
   <!-- ============ APP (site) ============ -->
   <div id="screen-app" class="screen">
     <nav class="navbar" id="navbar">
@@ -516,11 +533,54 @@ document.getElementById('form-login').addEventListener('submit', function(e){
   goTo('app');
   goToView('dashboard');
 });
-document.getElementById('form-support').addEventListener('submit', function(e){
-  e.preventDefault();
-  document.getElementById('support-confirm').style.display = 'block';
+let modoCadastro = false;
+let tarifaAtualKwh = 0.85;
+
+// Alterna entre tela de Login e tela de Cadastro
+document.getElementById('auth-toggle-btn').addEventListener('click', () => {
+  modoCadastro = !modoCadastro;
+  document.getElementById('campo-cep').style.display = modoCadastro ? 'block' : 'none';
+  document.getElementById('auth-cep').required = modoCadastro;
+  document.getElementById('btn-auth-submit').textContent = modoCadastro ? 'Criar Conta' : 'Entrar';
+  document.getElementById('auth-toggle-text').textContent = modoCadastro ? 'Já possui conta?' : 'Não tem conta?';
+  document.getElementById('auth-toggle-btn').textContent = modoCadastro ? 'Entrar' : 'Cadastre-se';
 });
 
+// Envio do formulário (Login ou Cadastro)
+document.getElementById('form-auth').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value;
+  const senha = document.getElementById('auth-senha').value;
+  const cep = document.getElementById('auth-cep').value;
+
+  const url = modoCadastro ? '/api/cadastrar' : '/api/login';
+  const payload = modoCadastro ? { email, senha, cep } : { email, senha };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.erro || 'Erro na autenticação');
+      return;
+    }
+
+    if (modoCadastro) {
+      alert('Cadastro realizado! Faça login com suas credenciais.');
+      document.getElementById('auth-toggle-btn').click();
+    } else {
+      tarifaAtualKwh = data.tarifa;
+      goTo('app');
+      goToView('dashboard');
+    }
+  } catch (err) {
+    alert('Erro de comunicação com o servidor.');
+  }
+});
 async function atualizarTudo(){
   await Promise.all([buscarLeituras(), buscarStats()]);
   renderDashboard();
