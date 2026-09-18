@@ -7,6 +7,7 @@ import threading
 from datetime import datetime
 import requests
 
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, jsonify, request, send_from_directory
 
 try:
