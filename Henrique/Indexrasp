@@ -528,11 +528,6 @@ function renderLearn(){
     </a>`).join('');
 }
 
-document.getElementById('form-login').addEventListener('submit', function(e){
-  e.preventDefault();
-  goTo('app');
-  goToView('dashboard');
-});
 let modoCadastro = false;
 let tarifaAtualKwh = 0.85;
 
@@ -581,6 +576,7 @@ document.getElementById('form-auth').addEventListener('submit', async (e) => {
     alert('Erro de comunicação com o servidor.');
   }
 });
+
 async function atualizarTudo(){
   await Promise.all([buscarLeituras(), buscarStats()]);
   renderDashboard();
