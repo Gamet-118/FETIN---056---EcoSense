@@ -1,97 +1,179 @@
-AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug
-
-import serial
+import os
 import time
 import datetime
-from google import genai
+import sqlite3
+import threading
+import requests
+import serial
+from flask import Flask, jsonify, request, send_from_directory
 
-# Deixe None (sem aspas) para usar o horário real da Raspberry Pi.
-HORARIO_TESTE = "19:30"
-
-# (/dev/ttyUSB0 ou /dev/ttyACM0)
-PORTA_SERIAL = '/dev/ttyUSB0' 
+# =====================================================
+# CONFIGURAÇÕES (DO SEU COLETOR ORIGINAL)
+# =====================================================
+PORTA_SERIAL = "/dev/ttyUSB0"
 BAUD_RATE = 115200
+DB_PATH = "/home/pedro/ProjetoEnergia/banco/energia.db"
+NOME_DISPOSITIVO = "ESP32_01"
 
-# Inicializa o cliente da API do Gemini
-client = genai.Client(api_key="AQ.Ab8RN6K5HQa0BlLmQOGXS5yXk8pRgR09rTOzEJ8nYzTMQWmEug")
+# Tarifas base por Estado (R$/kWh)
+TARIFAS_ESTADO = {
+    'MG': 0.89, 'SP': 0.84, 'RJ': 1.05,
+    'PR': 0.81, 'SC': 0.73, 'RS': 0.88, 'BA': 0.94
+}
+TARIFA_PADRAO = 0.85
 
-#print("Modelos disponiveis: ")
-#for m in client.models.list():
-   # print(m.name)
-    
-# Inicializa a conexão Serial
-try:
-    ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=1)
-    print(f"Conectado com sucesso na porta {PORTA_SERIAL}")
-except Exception as e:
-    print(f"Erro ao abrir a porta serial {PORTA_SERIAL}: {e}")
-    print("O código continuará rodando em modo de simulação.")
-    ser = None
+app = Flask(__name__, static_folder='static', static_url_path='')
 
-# LOOP PRINCIPAL
-print("Iniciando monitoramento do EcoSense...")
+# =====================================================
+# BANCO DE DADOS (SEU CÓDIGO ORIGINAL)
+# =====================================================
+def conectar_banco():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS leituras (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            corrente REAL NOT NULL,
+            tensao REAL NOT NULL,
+            potencia REAL NOT NULL,
+            energia REAL NOT NULL,
+            dispositivo TEXT NOT NULL,
+            data_hora TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
 
-try:
+def salvar_leitura(conn, corrente, tensao, potencia, energia):
+    cursor = conn.cursor()
+    data_hora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO leituras (corrente, tensao, potencia, energia, dispositivo, data_hora)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (corrente, tensao, potencia, energia, NOME_DISPOSITIVO, data_hora))
+    conn.commit()
+
+# =====================================================
+# LEITURA SERIAL DA ESP32 (SEU CÓDIGO ORIGINAL)
+# =====================================================
+def conectar_serial():
     while True:
-        dados_sensores = ""
-        
-        # 1. Leitura dos dados da ESP32
-        if ser and ser.in_waiting > 0:
-            try:
-                dados_sensores = ser.readline().decode('utf-8').strip()
-            except Exception as e:
-                print(f"Erro ao ler a serial: {e}")
-        
-        # Se não houver dados na serial, usa uma simulação para testes
-        if not dados_sensores:
-            dados_sensores = "Luminosidade: Alta, Presenca: 1, Consumo: 450W"
-            print("\n[Modo Simulação] Usando dados fictícios para teste.")
-        else:
-            print(f"\n[Dados Recebidos]: {dados_sensores}")
-
-        # 2. Definição do Horário (Teste ou Real)
-        if HORARIO_TESTE:
-            hora_atual = HORARIO_TESTE
-            print(f"Horário de TESTE ativo: {hora_atual}")
-        else:
-            hora_atual = datetime.datetime.now().strftime("%H:%M")
-            print(f"Horário real do sistema: {hora_atual}")
-
-        # 3. Monta a instrução do sistema com o horário dinâmico
-        system_instruction = f"""
-        Você é o EcoSense, um assistente inteligente de eficiência energética para projetos de IoT.
-        O horário atual do sistema é: {hora_atual}.
-        Use essa informação de horário para dar dicas contextuais sobre o consumo de energia. 
-        Lembre-se:
-        - Horários de pico (ex: 18h às 21h) a tarifa de energia é muito mais cara.
-        - Horários diurnos são ideais para aproveitar a luz natural.
-        Seja curto, direto e dê apenas uma recomendação prática baseada nos dados dos sensores e na hora atual.
-        """
-
-        # 4. Envia os dados e o contexto para o Gemini
         try:
-            # Enviando a configuração diretamente no dicionário do 'config'
-            response = client.models.generate_content(
-                model='gemini-flash-latest',
-                contents=f"Dados atuais dos sensores: {dados_sensores}",
-                config={
-                    'system_instruction': system_instruction,
-                    'temperature': 0.7
-                }
-            )
-            
-            print("--- Dica do EcoSense ---")
-            print(response.text)
-            print("------------------------")
-            
+            ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
+            print(f"[Serial] Conectado em {PORTA_SERIAL} ({BAUD_RATE} bps)")
+            return ser
         except Exception as e:
-            print(f"Erro ao chamar a API do Gemini: {e}")
+            print(f"[Aviso] Aguardando ESP32 em {PORTA_SERIAL}... ({e})")
+            time.sleep(5)
 
-        # 5. Aguarda 10 segundos antes da próxima leitura
-        time.sleep(10)
+def thread_coletor():
+    conn = conectar_banco()
+    ser = conectar_serial()
+    horario_ultima_leitura = time.time()
 
-except KeyboardInterrupt:
-    print("\nPrograma encerrado pelo usuário.")
-    if ser:
-        ser.close()
-        print("Conexão serial fechada.")
+    while True:
+        try:
+            linha_bruta = ser.readline().decode("utf-8", errors="ignore").strip()
+            if not linha_bruta:
+                continue
+
+            partes = linha_bruta.split(",")
+            if len(partes) != 4:
+                continue
+
+            tensao = float(partes[0])
+            corrente = float(partes[1])
+            potencia = float(partes[2])
+            dispositivo = partes[3]
+
+            # Filtro de ruído da lâmpada desligada
+            if corrente <= 0.80:
+                corrente = 0.0
+                potencia = 0.0
+
+            agora = time.time()
+            intervalo_horas = (agora - horario_ultima_leitura) / 3600.0
+            energia_incremental = (potencia * intervalo_horas) / 1000.0
+            horario_ultima_leitura = agora
+
+            salvar_leitura(conn, corrente, tensao, potencia, energia_incremental)
+            print(f"[Medição] {tensao:.1f}V | {corrente:.2f}A | {potencia:.1f}W | {dispositivo}")
+
+        except serial.SerialException:
+            print("[Erro] Conexão serial perdida. Reconectando...")
+            ser.close()
+            ser = conectar_serial()
+        except Exception as e:
+            time.sleep(0.5)
+
+# =====================================================
+# ROTAS PARA O SITE ACESSAR OS DADOS
+# =====================================================
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index.html')
+
+@app.route('/api/tarifa-cep')
+def rota_tarifa():
+    cep = request.args.get('cep', '').replace('-', '').strip()
+    if len(cep) != 8:
+        return jsonify({'erro': 'CEP inválido'}), 400
+    try:
+        r = requests.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=4).json()
+        if 'erro' in r:
+            return jsonify({'erro': 'CEP não encontrado'}), 404
+        uf = r.get('uf', 'SP')
+        cidade = r.get('localidade', '')
+        tarifa = TARIFAS_ESTADO.get(uf, TARIFA_PADRAO)
+        return jsonify({'cidade': cidade, 'uf': uf, 'tarifa_kwh': tarifa})
+    except Exception as e:
+        return jsonify({'tarifa_kwh': TARIFA_PADRAO, 'erro': str(e)})
+
+@app.route('/api/leituras')
+def rota_leituras():
+    conn = conectar_banco()
+    cursor = conn.cursor()
+    cursor.execute("SELECT potencia FROM leituras ORDER BY id DESC LIMIT 24")
+    linhas = cursor.fetchall()
+    conn.close()
+    return jsonify([{'potencia': l['potencia']} for l in reversed(linhas)])
+
+@app.route('/api/stats')
+def rota_stats():
+    tarifa = float(request.args.get('tarifa', TARIFA_PADRAO))
+    conn = conectar_banco()
+    cursor = conn.cursor()
+    cursor.execute("SELECT corrente, potencia FROM leituras ORDER BY id DESC LIMIT 1")
+    ultima = cursor.fetchone()
+
+    cursor.execute("SELECT AVG(potencia), MAX(potencia) FROM (SELECT potencia FROM leituras ORDER BY id DESC LIMIT 50)")
+    stats = cursor.fetchone()
+
+    cursor.execute("SELECT SUM(energia) FROM leituras")
+    total_kwh = cursor.fetchone()[0] or 0.0
+    conn.close()
+
+    pot = ultima['potencia'] if ultima else 0.0
+    corr = ultima['corrente'] if ultima else 0.0
+    med = stats[0] if (stats and stats[0]) else pot
+    pico = stats[1] if (stats and stats[1]) else pot
+
+    return jsonify({
+        'ultima_potencia': round(pot, 2),
+        'ultima_corrente': round(corr, 2),
+        'kwh_hoje': round(total_kwh, 4),
+        'custo_hoje': round(total_kwh * tarifa, 2),
+        'media': round(med, 2),
+        'maximo': round(pico, 2)
+    })
+
+# =====================================================
+# INICIALIZAÇÃO
+# =====================================================
+if __name__ == '__main__':
+    conectar_banco().close()
+    t = threading.Thread(target=thread_coletor, daemon=True)
+    t.start()
+    app.run(host='0.0.0.0', port=5000, debug=False)
