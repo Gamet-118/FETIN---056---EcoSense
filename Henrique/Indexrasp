@@ -576,7 +576,10 @@ document.getElementById('form-auth').addEventListener('submit', async (e) => {
     alert('Erro de comunicação com o servidor.');
   }
 });
-
+document.getElementById('form-support').addEventListener('submit', function(e){
+  e.preventDefault();
+  document.getElementById('support-confirm').style.display = 'block';
+});
 async function atualizarTudo(){
   await Promise.all([buscarLeituras(), buscarStats()]);
   renderDashboard();
