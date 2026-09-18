@@ -530,7 +530,17 @@ function renderLearn(){
     </a>`).join('');
 }
 
-let modoCadastro = false;
+// Alterna visibilidade da senha (olho)
+document.getElementById('toggle-senha').addEventListener('click', function() {
+  const campo = document.getElementById('auth-senha');
+  if (campo.type === 'password') {
+    campo.type = 'text';
+    this.textContent = '🙈';
+  } else {
+    campo.type = 'password';
+    this.textContent = '👁️';
+  }
+});
 let tarifaAtualKwh = 0.85;
 
 // Alterna entre tela de Login e tela de Cadastro
