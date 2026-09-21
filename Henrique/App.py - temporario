@@ -1,0 +1,366 @@
+import os
+import re
+import time
+import random
+import sqlite3
+import threading
+from datetime import datetime
+import requests
+
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, jsonify, request, send_from_directory
+
+try:
+    import serial
+except ImportError:
+    serial = None
+
+PORTA_SERIAL = '/dev/ttyUSB0'  # Altere para /dev/ttyACM0 se necessário
+BAUD_RATE = 115200
+DB_PATH = 'ecosense.db'
+
+TARIFA_PADRAO = 0.85
+tarifa_global_kwh = TARIFA_PADRAO
+limite_alerta_watts = 500.0  # Limite padrão para disparo de alerta de alto consumo
+
+TARIFAS_ESTADO = {
+    'MG': 0.89,
+    'SP': 0.84,
+    'RJ': 1.05,
+    'PR': 0.81,
+    'SC': 0.73,
+    'RS': 0.88,
+    'BA': 0.94,
+}
+
+app = Flask(__name__, static_folder='static', static_url_path='')
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS leituras (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            corrente REAL NOT NULL,
+            potencia REAL NOT NULL,
+            timestamp TEXT NOT NULL
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            cep TEXT NOT NULL,
+            tarifa REAL NOT NULL,
+            limite_watts REAL DEFAULT 500.0
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+
+def salvar_leitura(corrente, potencia):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO leituras (corrente, potencia, timestamp) VALUES (?, ?, ?)',
+        (corrente, potencia, datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+
+def ler_serial():
+    if serial is None:
+        modo_demonstracao()
+        return
+
+    try:
+        ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
+        print(f'[serial] Conectado em {PORTA_SERIAL}')
+    except Exception as e:
+        print(f'[serial] ESP32 não detectada em {PORTA_SERIAL} ({e}). Ativando modo demonstração...')
+        modo_demonstracao()
+        return
+
+    while True:
+        try:
+            linha = ser.readline().decode('utf-8', errors='ignore').strip()
+            if not linha:
+                continue
+
+            if ',' in linha:
+                partes = linha.split(',')
+                if len(partes) >= 3:
+                    corrente = float(partes[0])
+                    potencia = float(partes[2])
+                    
+                    if corrente <= 0.80:
+                        corrente = 0.0
+                        potencia = 0.0
+
+                    salvar_leitura(corrente, potencia)
+                    print(f'[sensor real] {corrente:.2f} A / {potencia:.2f} W')
+                    continue
+
+            m_corrente = re.search(r'Corrente\s*=\s*([\d.]+)\s*A', linha)
+            m_potencia = re.search(r'Potencia\s*=\s*([\d.]+)\s*W', linha)
+            if m_corrente and m_potencia:
+                salvar_leitura(float(m_corrente.group(1)), float(m_potencia.group(1)))
+
+        except Exception as e:
+            print(f'[serial] Erro lendo linha serial: {e}')
+            time.sleep(1)
+
+
+def modo_demonstracao():
+    base_potencia = 181.0
+    while True:
+        potencia = round(base_potencia + random.uniform(-4, 4), 2)
+        corrente = round(potencia / 127, 4)
+        salvar_leitura(corrente, potencia)
+        time.sleep(3)
+
+
+# =====================================================
+# ROTAS DE AUTENTICAÇÃO E CONFIGURAÇÃO
+# =====================================================
+@app.route('/api/cadastrar', methods=['POST'])
+def api_cadastrar():
+    dados = request.get_json() or {}
+    email = dados.get('email', '').strip().lower()
+    senha = dados.get('senha', '').strip()
+    cep = dados.get('cep', '').replace('-', '').strip()
+
+    if not email or not senha or len(cep) != 8:
+        return jsonify({'erro': 'Preencha todos os campos corretamente.'}), 400
+
+    tarifa = TARIFA_PADRAO
+    try:
+        r = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=4).json()
+        if 'uf' in r:
+            tarifa = TARIFAS_ESTADO.get(r['uf'], TARIFA_PADRAO)
+    except Exception:
+        pass
+
+    senha_hash = generate_password_hash(senha)
+
+    try:
+        conn = get_db()
+        conn.execute(
+            'INSERT INTO usuarios (email, senha, cep, tarifa, limite_watts) VALUES (?, ?, ?, ?, ?)',
+            (email, senha_hash, cep, tarifa, 500.0)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'mensagem': 'Usuário cadastrado com sucesso!', 'tarifa': tarifa})
+    except sqlite3.IntegrityError:
+        return jsonify({'erro': 'Este e-mail já está cadastrado.'}), 409
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    global tarifa_global_kwh, limite_alerta_watts
+    dados = request.get_json() or {}
+    email = dados.get('email', '').strip().lower()
+    senha = dados.get('senha', '').strip()
+
+    conn = get_db()
+    usuario = conn.execute('SELECT * FROM usuarios WHERE email = ?', (email,)).fetchone()
+    conn.close()
+
+    if usuario and check_password_hash(usuario['senha'], senha):
+        tarifa_global_kwh = usuario['tarifa']
+        limite_alerta_watts = usuario['limite_watts'] if 'limite_watts' in usuario.keys() else 500.0
+        return jsonify({
+            'sucesso': True,
+            'id': usuario['id'],
+            'email': usuario['email'],
+            'cep': usuario['cep'],
+            'tarifa': usuario['tarifa'],
+            'limite_watts': limite_alerta_watts
+        })
+    return jsonify({'erro': 'E-mail ou senha incorretos.'}), 401
+
+
+@app.route('/api/usuario/atualizar', methods=['POST'])
+def api_atualizar_usuario():
+    global tarifa_global_kwh, limite_alerta_watts
+    dados = request.get_json() or {}
+    user_id = dados.get('id')
+    novo_email = dados.get('email', '').strip().lower()
+    nova_senha = dados.get('senha', '').strip()
+    novo_cep = dados.get('cep', '').replace('-', '').strip()
+    nova_tarifa = dados.get('tarifa')
+    novo_limite = dados.get('limite_watts')
+
+    if not user_id or not novo_email:
+        return jsonify({'erro': 'Identificador de usuário ou e-mail inválido.'}), 400
+
+    conn = get_db()
+    usuario = conn.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone()
+    if not usuario:
+        conn.close()
+        return jsonify({'erro': 'Usuário não encontrado.'}), 404
+
+    # Atualiza tarifa se informada ou se o CEP foi modificado
+    tarifa_final = usuario['tarifa']
+    if nova_tarifa is not None:
+        try:
+            tarifa_final = float(nova_tarifa)
+        except ValueError:
+            pass
+    elif novo_cep and novo_cep != usuario['cep']:
+        try:
+            r = requests.get(f'https://viacep.com.br/ws/{novo_cep}/json/', timeout=4).json()
+            if 'uf' in r:
+                tarifa_final = TARIFAS_ESTADO.get(r['uf'], TARIFA_PADRAO)
+        except Exception:
+            pass
+
+    limite_final = float(novo_limite) if novo_limite else usuario['limite_watts']
+    senha_final = generate_password_hash(nova_senha) if nova_senha else usuario['senha']
+    cep_final = novo_cep if len(novo_cep) == 8 else usuario['cep']
+
+    try:
+        conn.execute('''
+            UPDATE usuarios 
+            SET email = ?, senha = ?, cep = ?, tarifa = ?, limite_watts = ?
+            WHERE id = ?
+        ''', (novo_email, senha_final, cep_final, tarifa_final, limite_final, user_id))
+        conn.commit()
+        conn.close()
+
+        tarifa_global_kwh = tarifa_final
+        limite_alerta_watts = limite_final
+        return jsonify({
+            'sucesso': True,
+            'email': novo_email,
+            'cep': cep_final,
+            'tarifa': tarifa_final,
+            'limite_watts': limite_final
+        })
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'erro': 'Este novo e-mail já pertence a outra conta.'}), 409
+
+
+@app.route('/api/usuario/excluir', methods=['POST'])
+def api_excluir_usuario():
+    dados = request.get_json() or {}
+    user_id = dados.get('id')
+    if not user_id:
+        return jsonify({'erro': 'ID não fornecido.'}), 400
+
+    conn = get_db()
+    conn.execute('DELETE FROM usuarios WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'sucesso': True, 'mensagem': 'Conta excluída com sucesso.'})
+
+
+@app.route('/api/leituras/limpar', methods=['POST'])
+def api_limpar_leituras():
+    conn = get_db()
+    conn.execute('DELETE FROM leituras')
+    conn.commit()
+    conn.close()
+    return jsonify({'sucesso': True, 'mensagem': 'Histórico de leituras zerado.'})
+
+
+# =====================================================
+# ROTAS DE LEITURAS E PAINEL
+# =====================================================
+@app.route('/api/tarifa-cep', methods=['GET'])
+def obter_tarifa_por_cep():
+    global tarifa_global_kwh
+    cep = request.args.get('cep', '').replace('-', '').strip()
+    if len(cep) != 8:
+        return jsonify({'erro': 'CEP inválido'}), 400
+
+    try:
+        resp = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=4).json()
+        if 'erro' in resp:
+            return jsonify({'erro': 'CEP não encontrado'}), 404
+
+        uf = resp.get('uf', 'SP')
+        cidade = resp.get('localidade', '')
+        tarifa_global_kwh = TARIFAS_ESTADO.get(uf, TARIFA_PADRAO)
+
+        return jsonify({
+            'cidade': cidade,
+            'uf': uf,
+            'tarifa_kwh': tarifa_global_kwh
+        })
+    except Exception as e:
+        return jsonify({'erro': str(e), 'tarifa_kwh': tarifa_global_kwh}), 500
+
+
+@app.route('/api/leituras')
+def api_leituras():
+    conn = get_db()
+    linhas = conn.execute(
+        'SELECT corrente, potencia, timestamp FROM leituras ORDER BY id DESC LIMIT 50'
+    ).fetchall()
+    conn.close()
+    dados = [dict(l) for l in reversed(linhas)]
+    return jsonify(dados)
+
+
+@app.route('/api/stats')
+def api_stats():
+    conn = get_db()
+    linhas = conn.execute(
+        'SELECT corrente, potencia FROM leituras ORDER BY id DESC LIMIT 200'
+    ).fetchall()
+    conn.close()
+
+    if not linhas:
+        return jsonify({
+            'ultima_potencia': 0.0,
+            'ultima_corrente': 0.0,
+            'media': 0.0,
+            'maximo': 0.0,
+            'minimo': 0.0,
+            'kwh_hoje': 0.0,
+            'custo_hoje': 0.0,
+            'limite_alerta': limite_alerta_watts
+        })
+
+    potencias = [l['potencia'] for l in linhas]
+    ultima = linhas[0]
+
+    media = sum(potencias) / len(potencias)
+    HORAS_USO_ESTIMADAS = 8
+    
+    kwh_hoje = (media * HORAS_USO_ESTIMADAS) / 1000
+    custo_hoje = kwh_hoje * tarifa_global_kwh
+
+    return jsonify({
+        'ultima_potencia': round(ultima['potencia'], 2),
+        'ultima_corrente': round(ultima['corrente'], 2),
+        'media': round(media, 2),
+        'maximo': round(max(potencias), 2),
+        'minimo': round(min(potencias), 2),
+        'kwh_hoje': round(kwh_hoje, 3),
+        'custo_hoje': round(custo_hoje, 2),
+        'limite_alerta': limite_alerta_watts
+    })
+
+
+@app.route('/')
+def home():
+    return send_from_directory('static', 'index.html')
+
+
+if __name__ == '__main__':
+    init_db()
+    thread_serial = threading.Thread(target=ler_serial, daemon=True)
+    thread_serial.start()
+    app.run(host='0.0.0.0', port=5000, debug=False)
