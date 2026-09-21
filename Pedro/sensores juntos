@@ -8,7 +8,7 @@
 
 const int PIN_ZMPT = 34;
 
-const float SENSITIVITY = 140.67f;
+const float SENSITIVITY = 146.6f;
 
 ZMPT101B voltageSensor(PIN_ZMPT, 60.0);
 
@@ -19,7 +19,7 @@ ZMPT101B voltageSensor(PIN_ZMPT, 60.0);
 
 const int PIN_SCT = 32;
 
-const float CAL_SCT = 196;
+const float CAL_SCT = 7.44;
 
 EnergyMonitor SCT013;
 
