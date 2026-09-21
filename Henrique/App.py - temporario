@@ -23,16 +23,29 @@ TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
 limite_alerta_watts = 500.0  # Limite padrão para disparo de alerta de alto consumo
 
-TARIFAS_ESTADO = {
-    'MG': 0.89,
-    'SP': 0.84,
-    'RJ': 1.05,
-    'PR': 0.81,
-    'SC': 0.73,
-    'RS': 0.88,
-    'BA': 0.94,
+TARIFA_PADRAO = 0.85
+tarifa_global_kwh = TARIFA_PADRAO
+limite_alerta_watts = 500.0
+
+DISTRIBUIDORAS_CIDADES = {
+    'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
+    'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
+    'Ribeirão Preto': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
+    'Santos': {'empresa': 'CPFL Piratininga', 'tarifa': 0.85},
+    'Rio de Janeiro': {'empresa': 'Light', 'tarifa': 1.06},
+    'Niterói': {'empresa': 'Enel RJ', 'tarifa': 1.09},
+    'Poços de Caldas': {'empresa': 'DMEE', 'tarifa': 0.79},
 }
 
+DISTRIBUIDORAS_ESTADO = {
+    'MG': {'empresa': 'CEMIG', 'tarifa': 0.89},
+    'SP': {'empresa': 'CPFL / Enel', 'tarifa': 0.85},
+    'RJ': {'empresa': 'Light / Enel RJ', 'tarifa': 1.05},
+    'PR': {'empresa': 'COPEL', 'tarifa': 0.81},
+    'SC': {'empresa': 'CELESC', 'tarifa': 0.73},
+    'RS': {'empresa': 'CEEE Equatorial / RGE', 'tarifa': 0.88},
+    'BA': {'empresa': 'Neoenergia Coelba', 'tarifa': 0.94},
+}
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 
@@ -289,14 +302,28 @@ def obter_tarifa_por_cep():
         if 'erro' in resp:
             return jsonify({'erro': 'CEP não encontrado'}), 404
 
-        uf = resp.get('uf', 'SP')
         cidade = resp.get('localidade', '')
-        tarifa_global_kwh = TARIFAS_ESTADO.get(uf, TARIFA_PADRAO)
+        uf = resp.get('uf', 'SP')
+
+        if cidade in DISTRIBUIDORAS_CIDADES:
+            dados = DISTRIBUIDORAS_CIDADES[cidade]
+            empresa = dados['empresa']
+            tarifa = dados['tarifa']
+        elif uf in DISTRIBUIDORAS_ESTADO:
+            dados = DISTRIBUIDORAS_ESTADO[uf]
+            empresa = dados['empresa']
+            tarifa = dados['tarifa']
+        else:
+            empresa = 'Concessionária Padrão'
+            tarifa = TARIFA_PADRAO
+
+        tarifa_global_kwh = tarifa
 
         return jsonify({
             'cidade': cidade,
             'uf': uf,
-            'tarifa_kwh': tarifa_global_kwh
+            'empresa': empresa,
+            'tarifa_kwh': tarifa
         })
     except Exception as e:
         return jsonify({'erro': str(e), 'tarifa_kwh': tarifa_global_kwh}), 500
