@@ -240,20 +240,34 @@
   <div id="screen-app" class="screen">
     <nav class="navbar" id="navbar">
       <div class="navbar-inner">
-        <div class="brand"><span class="dot">🌿</span>EcoSense</div>
+        <!-- Logo clicável que volta para o início -->
+        <div class="brand" onclick="goToView('dashboard')" style="cursor: pointer;" title="Voltar ao início">
+          <span class="dot">🌿</span>EcoSense
+        </div>
+
         <div class="nav-links" id="nav-links">
           <button class="nav-link active" data-view="dashboard" onclick="goToView('dashboard')">Início</button>
           <button class="nav-link" data-view="reports" onclick="goToView('reports')">Relatórios</button>
           <button class="nav-link" data-view="alerts" onclick="goToView('alerts')">Alertas</button>
           <button class="nav-link" data-view="learn" onclick="goToView('learn')">Aprenda</button>
-          <button class="nav-link" data-view="settings" onclick="goToView('settings')">Configurações</button>
           <button class="nav-link" data-view="support" onclick="goToView('support')">Suporte</button>
         </div>
-        <span class="status-pill"><span class="status-dot"></span>Sensor conectado</span>
+
+        <!-- Engrenagem à esquerda do status do sensor -->
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="nav-link" data-view="settings" onclick="goToView('settings')" title="Configurações" style="padding: 6px 10px; font-size: 19px; line-height: 1;">
+            ⚙️
+          </button>
+          
+          <span class="status-pill" id="status-sensor-pill">
+            <span class="status-dot" id="status-sensor-dot"></span>
+            <span id="status-sensor-text">Verificando...</span>
+          </span>
+        </div>
+
         <button class="hamburger" onclick="document.getElementById('navbar').classList.toggle('nav-open')">☰</button>
       </div>
     </nav>
-
     <main>
       <!-- ---- DASHBOARD ---- -->
       <section id="view-dashboard" class="view active">
@@ -268,7 +282,11 @@
           </div>
           <div class="hero-side">
             <div class="card"><div class="stat-label">Consumo hoje</div><div class="stat-value" id="dash-kwh">-- kWh</div></div>
-            <div class="card"><div class="stat-label">Custo estimado</div><div class="stat-value" id="dash-cost">R$ --</div></div>
+            <div class="card">
+            <div class="stat-label">Custo estimado</div>
+            <div class="stat-value" id="dash-cost">R$ --</div>
+            <div style="font-size: 11px; color: var(--white-7); margin-top: 4px;" id="dash-concessionaria-info">Tarifa regional: carregando...</div>
+            </div>
           </div>
         </div>
 
@@ -409,6 +427,9 @@
             Ações administrativas para reiniciar testes durante a feira de ciências ou encerrar a sessão.
           </p>
           <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+            <button class="btn-secondary" id="btn-simular-pico" type="button" style="background: rgba(245,158,11,.15); border-color: #F59E0B; color: #FDE68A;">
+              ⚡ Simular Carga Alta (1500W)
+            </button>
             <button class="btn-secondary" id="btn-limpar-leituras" type="button">🔄 Zerar Histórico de Leituras</button>
             <button class="btn-secondary" id="btn-logout" type="button">🚪 Sair da Conta (Logout)</button>
             <button class="btn-danger" id="btn-excluir-conta" type="button">🗑️ Excluir Minha Conta</button>
@@ -658,7 +679,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
+    // 10. Botão da Feira: Simular Pico de 1500W
+  const btnPico = document.getElementById('btn-simular-pico');
+  if (btnPico) {
+    btnPico.addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/simular-pico', { method: 'POST' });
+        const d = await r.json();
+        btnPico.textContent = d.simulando_pico ? '🟢 Desativar Simulação (Voltar ao Normal)' : '⚡ Simular Carga Alta (1500W)';
+        alert(d.mensagem);
+      } catch (e) {
+        alert('Erro ao acionar simulação de pico.');
+      }
+    });
+  }
   // Suporte
   const formSupport = document.getElementById('form-support');
   if (formSupport) {
@@ -736,6 +770,25 @@ function renderDashboard(){
   if (cost) cost.textContent = 'R$ ' + (cacheStats.custo_hoje || 0).toFixed(2).replace('.', ',');
   if (avg) avg.textContent = fmtW(cacheStats.media);
   if (maxEl) maxEl.textContent = fmtW(cacheStats.maximo);
+
+  // Exibe informações da concessionária e tarifa no painel
+  const concInfo = document.getElementById('dash-concessionaria-info');
+  if (concInfo) {
+    concInfo.textContent = `Tarifa: R$ ${(usuarioLogado.tarifa || 0.85).toFixed(2)}/kWh (${usuarioLogado.cep ? 'CEP ' + usuarioLogado.cep : 'Padrão'})`;
+  }
+
+  // Atualiza status dinâmico do sensor (físico vs simulação)
+  const sensorText = document.getElementById('status-sensor-text');
+  const sensorDot = document.getElementById('status-sensor-dot');
+  if (sensorText && sensorDot) {
+    if (cacheStats.sensor_conectado) {
+      sensorText.textContent = "Sensor conectado";
+      sensorDot.style.background = "var(--ok)"; // Verde
+    } else {
+      sensorText.textContent = "Modo Simulação (Sem ESP32)";
+      sensorDot.style.background = "#9CA3AF"; // Cinza
+    }
+  }
 
   // Alerta Visual de Consumo Alto
   if (potenciaAtual > limiteWatts) {
