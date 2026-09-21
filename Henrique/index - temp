@@ -1,0 +1,311 @@
+<script>
+const INTERVALO_ATUALIZACAO_MS = 3000;
+let cacheLeituras = [];
+let cacheStats = null;
+let modoCadastro = false;
+let tarifaAtualKwh = 0.85;
+
+function goTo(nome){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + nome);
+  if (el) el.classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function goToView(nome){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('view-' + nome);
+  if (el) el.classList.add('active');
+  
+  document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+  const link = document.querySelector(`.nav-link[data-view="${nome}"]`);
+  if (link) link.classList.add('active');
+  
+  const nav = document.getElementById('navbar');
+  if (nav) nav.classList.remove('nav-open');
+  window.scrollTo(0,0);
+}
+
+// Executa apenas quando todo o HTML terminar de carregar na tela
+document.addEventListener('DOMContentLoaded', () => {
+
+  // 1. Olho da senha
+  const toggleSenhaEl = document.getElementById('toggle-senha');
+  if (toggleSenhaEl) {
+    toggleSenhaEl.addEventListener('click', function() {
+      const campo = document.getElementById('auth-senha');
+      if (!campo) return;
+      if (campo.type === 'password') {
+        campo.type = 'text';
+        this.textContent = '🙈';
+      } else {
+        campo.type = 'password';
+        this.textContent = '👁️';
+      }
+    });
+  }
+
+  // 2. Alternar Login / Cadastro
+  const authToggleBtn = document.getElementById('auth-toggle-btn');
+  if (authToggleBtn) {
+    authToggleBtn.addEventListener('click', () => {
+      modoCadastro = !modoCadastro;
+      const campoCep = document.getElementById('campo-cep');
+      const authCep = document.getElementById('auth-cep');
+      const btnSubmit = document.getElementById('btn-auth-submit');
+      const toggleText = document.getElementById('auth-toggle-text');
+
+      if (campoCep) campoCep.style.display = modoCadastro ? 'block' : 'none';
+      if (authCep) authCep.required = modoCadastro;
+      if (btnSubmit) btnSubmit.textContent = modoCadastro ? 'Criar Conta' : 'Entrar';
+      if (toggleText) toggleText.textContent = modoCadastro ? 'Já possui conta?' : 'Não tem conta?';
+      authToggleBtn.textContent = modoCadastro ? 'Entrar' : 'Cadastre-se';
+    });
+  }
+
+  // 3. Envio do Formulário (Login / Cadastro)
+  const formAuth = document.getElementById('form-auth');
+  if (formAuth) {
+    formAuth.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const emailEl = document.getElementById('auth-email');
+      const senhaEl = document.getElementById('auth-senha');
+      const cepEl = document.getElementById('auth-cep');
+
+      const email = emailEl ? emailEl.value : '';
+      const senha = senhaEl ? senhaEl.value : '';
+      const cep = cepEl ? cepEl.value : '';
+
+      const url = modoCadastro ? '/api/cadastrar' : '/api/login';
+      const payload = modoCadastro ? { email, senha, cep } : { email, senha };
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(data.erro || 'Erro na autenticação');
+          return;
+        }
+
+        if (modoCadastro) {
+          alert('Conta criada com sucesso! Agora faça o login.');
+          const toggle = document.getElementById('auth-toggle-btn');
+          if (toggle) toggle.click();
+        } else {
+          tarifaAtualKwh = data.tarifa || 0.85;
+          goTo('app');
+          goToView('dashboard');
+          atualizarTudo();
+          setInterval(atualizarTudo, INTERVALO_ATUALIZACAO_MS);
+        }
+      } catch (err) {
+        alert('Erro ao se comunicar com o servidor da Raspberry Pi.');
+      }
+    });
+  }
+
+  // 4. Suporte
+  const formSupport = document.getElementById('form-support');
+  if (formSupport) {
+    formSupport.addEventListener('submit', function(e){
+      e.preventDefault();
+      const conf = document.getElementById('support-confirm');
+      if (conf) conf.style.display = 'block';
+    });
+  }
+
+  renderLearn();
+});
+
+async function buscarLeituras(){
+  try{ 
+    const r = await fetch('/api/leituras'); 
+    if (r.ok) cacheLeituras = await r.json(); 
+  } catch(e){ console.error('Erro ao buscar leituras:', e); }
+}
+
+async function buscarStats(){
+  try{ 
+    const r = await fetch(`/api/stats?tarifa=${tarifaAtualKwh}`); 
+    if (r.ok) cacheStats = await r.json(); 
+  } catch(e){ console.error('Erro ao buscar stats:', e); }
+}
+
+function media(l){ return l.length ? l.reduce((s,n)=>s+n,0)/l.length : 0; }
+function maximo(l){ return l.length ? Math.max(...l) : 0; }
+function minimo(l){ return l.length ? Math.min(...l) : 0; }
+function fmtW(v){ return (v || 0).toFixed(2)+' W'; }
+function fmtA(v){ return (v || 0).toFixed(2)+' A'; }
+
+function renderDashboard(){
+  if (!cacheStats) return;
+  const p = document.getElementById('dash-power');
+  const c = document.getElementById('dash-current');
+  const k = document.getElementById('dash-kwh');
+  const cost = document.getElementById('dash-cost');
+  const avg = document.getElementById('dash-avg');
+  const maxEl = document.getElementById('dash-max');
+  const tip = document.getElementById('dash-tip');
+
+  if (p) p.textContent = fmtW(cacheStats.ultima_potencia);
+  if (c) c.innerHTML = `Corrente: ${fmtA(cacheStats.ultima_corrente)} · <span id="dash-updated">atualizado agora</span>`;
+  if (k) k.textContent = (cacheStats.kwh_hoje || 0).toFixed(2) + ' kWh';
+  if (cost) cost.textContent = 'R$ ' + (cacheStats.custo_hoje || 0).toFixed(2).replace('.', ',');
+  if (avg) avg.textContent = fmtW(cacheStats.media);
+  if (maxEl) maxEl.textContent = fmtW(cacheStats.maximo);
+
+  if (tip) {
+    tip.textContent = (cacheStats.ultima_potencia || 0) > (cacheStats.media || 0)
+      ? 'Sua potência atual está acima da média. Vale checar quais aparelhos estão ligados.'
+      : 'Seu consumo atual está estável, próximo da média das últimas leituras.';
+  }
+
+  const el = document.getElementById('dash-bars');
+  const ultimas = cacheLeituras.slice(-24);
+  if (el && ultimas.length){
+    const max = maximo(ultimas.map(l => l.potencia)) || 1;
+    el.innerHTML = ultimas.map(l => {
+      const h = Math.round((l.potencia / max) * 100);
+      return `<div class="bar-col"><div class="bar" style="height:${h}%"></div></div>`;
+    }).join('');
+  }
+}
+
+function setReportTab(tipo){
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const b = document.querySelector(`.tab[data-rep="${tipo}"]`);
+  if (b) b.classList.add('active');
+  renderReportChart(tipo);
+}
+
+function renderReportChart(tipo){
+  if (!cacheStats || !cacheLeituras.length) return;
+  const container = document.getElementById('rep-bars');
+  const titleEl = document.getElementById('rep-chart-title');
+  let labels, valores, explicacao;
+
+  if (tipo === 'diario') {
+    if (titleEl) titleEl.textContent = 'Leituras reais do sensor (hoje)';
+    valores = cacheLeituras.map(l => l.potencia);
+    labels = cacheLeituras.map((_, i) => i % 6 === 0 ? i + 'ª' : '');
+    explicacao = 'Estes são os valores medidos de verdade pelo seu sensor hoje.';
+  } else if (tipo === 'semanal') {
+    if (titleEl) titleEl.textContent = 'Estimativa semanal (a partir da média real)';
+    labels = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+    valores = labels.map((_, i) => cacheStats.media * (0.9 + (i % 4) * 0.06));
+    explicacao = 'Dias estimados a partir da média de potência.';
+  } else if (tipo === 'mensal') {
+    if (titleEl) titleEl.textContent = 'Estimativa mensal (4 semanas)';
+    labels = ['Sem 1','Sem 2','Sem 3','Sem 4'];
+    valores = labels.map((_, i) => cacheStats.media * (0.95 + i * 0.03));
+    explicacao = 'Projeção de 4 semanas com base na média atual.';
+  } else if (tipo === 'semestral') {
+    if (titleEl) titleEl.textContent = 'Estimativa semestral (6 meses)';
+    labels = ['Jan','Fev','Mar','Abr','Mai','Jun'];
+    valores = labels.map((_, i) => cacheStats.media * (0.88 + i * 0.025));
+    explicacao = 'Visão de 6 meses estimada.';
+  } else {
+    if (titleEl) titleEl.textContent = 'Estimativa anual (por trimestre)';
+    labels = ['T1','T2','T3','T4'];
+    valores = labels.map((_, i) => cacheStats.media * (0.9 + i * 0.05));
+    explicacao = 'Visão anual por trimestre.';
+  }
+
+  const max = maximo(valores) || 1;
+  if (container) {
+    container.innerHTML = valores.map((v, i) => {
+      const h = Math.max(4, Math.round((v / max) * 100));
+      const peak = v === max;
+      return `<div class="bar-col ${peak ? 'peak' : ''}"><div class="bar" style="height:${h}%"></div><div class="bar-label">${labels[i]}</div></div>`;
+    }).join('');
+  }
+
+  const rAvg = document.getElementById('rep-avg');
+  const rMax = document.getElementById('rep-max');
+  const rMin = document.getElementById('rep-min');
+  const rExp = document.getElementById('rep-explainer');
+
+  if (rAvg) rAvg.textContent = fmtW(media(valores));
+  if (rMax) rMax.textContent = fmtW(maximo(valores));
+  if (rMin) rMin.textContent = fmtW(minimo(valores));
+  if (rExp) rExp.textContent = explicacao;
+  renderTrendBanner(valores);
+}
+
+function renderTrendBanner(valores){
+  const meio = Math.floor(valores.length / 2);
+  const primeira = media(valores.slice(0, meio || 1));
+  const segunda = media(valores.slice(meio));
+  const deltaPct = primeira ? ((segunda - primeira) / primeira) * 100 : 0;
+  const banner = document.getElementById('rep-trend-banner');
+  if (!banner) return;
+
+  if (Math.abs(deltaPct) < 1) {
+    banner.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:10px;">
+      <span style="font-size:20px;">➖</span>
+      <div><b style="font-size:13px;">Consumo estável</b><br><span style="font-size:11px; color:var(--white-7);">Sem variação relevante.</span></div>
+    </div>`;
+  } else if (deltaPct < 0) {
+    banner.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:10px;">
+      <span style="font-size:20px;">🎉</span>
+      <div><b style="font-size:13px; color:#10B981;">Você economizou ${Math.abs(deltaPct).toFixed(1)}%</b></div>
+    </div>`;
+  } else {
+    banner.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:10px;">
+      <span style="font-size:20px;">⚠️</span>
+      <div><b style="font-size:13px; color:#D97706;">Consumo subiu ${deltaPct.toFixed(1)}%</b></div>
+    </div>`;
+  }
+}
+
+function renderAlerts(){
+  if (!cacheStats || !cacheStats.media) return;
+  const deltaPct = Math.round(((cacheStats.ultima_potencia - cacheStats.media) / cacheStats.media) * 100);
+  const aDelta = document.getElementById('alert-delta');
+  const aDesc = document.getElementById('alert-peak-desc');
+  if (aDelta) aDelta.textContent = Math.max(deltaPct, 1) + '%';
+  if (aDesc) aDesc.textContent = `Pico de ${(cacheStats.maximo || 0).toFixed(2)} W registrado nas leituras.`;
+}
+
+const cartilhasData = [
+  { titulo: 'Dicas de Economia e Segurança', desc: 'ANEEL — cuidados básicos com energia', url: 'https://www.gov.br/aneel' },
+  { titulo: 'Consumidor Consciente de Energia', desc: 'Ministério de Minas e Energia', url: 'https://www.gov.br/mme' },
+];
+const cursosData = [
+  { titulo: 'Playlist educativa sobre energia', orgao: 'ANEEL', url: 'https://www.youtube.com' },
+];
+
+function renderLearn(){
+  const cList = document.getElementById('cartilhas-list');
+  const uList = document.getElementById('cursos-list');
+  if (cList) {
+    cList.innerHTML = cartilhasData.map(c => `
+      <a class="resource-card" href="${c.url}" target="_blank" rel="noopener">
+        <span class="r-icon">📄</span>
+        <span><div class="r-title">${c.titulo}</div><div class="r-sub">${c.desc}</div></span>
+        <span class="r-go">↗</span>
+      </a>`).join('');
+  }
+  if (uList) {
+    uList.innerHTML = cursosData.map(c => `
+      <a class="resource-card" href="${c.url}" target="_blank" rel="noopener">
+        <span class="r-icon">🎓</span>
+        <span><div class="r-title">${c.titulo}</div><div class="r-sub">${c.orgao}</div></span>
+        <span class="r-go">↗</span>
+      </a>`).join('');
+  }
+}
+
+async function atualizarTudo(){
+  await Promise.all([buscarLeituras(), buscarStats()]);
+  renderDashboard();
+  const tabAtiva = document.querySelector('.tab.active');
+  renderReportChart(tabAtiva ? tabAtiva.dataset.rep : 'diario');
+  renderAlerts();
+}
+</script>
