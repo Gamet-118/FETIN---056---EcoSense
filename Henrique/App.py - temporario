@@ -19,6 +19,12 @@ PORTA_SERIAL = '/dev/ttyUSB0'  # Altere para /dev/ttyACM0 se necessário
 BAUD_RATE = 115200
 DB_PATH = 'ecosense.db'
 
+# Status de conexão real e simulação de pico para a feira
+sensor_conectado_real = False
+simulando_pico_feira = False
+
+TARIFA_PADRAO = 0.85
+
 TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
 limite_alerta_watts = 500.0  # Limite padrão para disparo de alerta de alto consumo
@@ -90,15 +96,19 @@ def salvar_leitura(corrente, potencia):
 
 
 def ler_serial():
+    global sensor_conectado_real
     if serial is None:
+        sensor_conectado_real = False
         modo_demonstracao()
         return
 
     try:
         ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
         print(f'[serial] Conectado em {PORTA_SERIAL}')
+        sensor_conectado_real = True
     except Exception as e:
         print(f'[serial] ESP32 não detectada em {PORTA_SERIAL} ({e}). Ativando modo demonstração...')
+        sensor_conectado_real = False
         modo_demonstracao()
         return
 
@@ -133,9 +143,15 @@ def ler_serial():
 
 
 def modo_demonstracao():
+    global simulando_pico_feira
     base_potencia = 181.0
     while True:
-        potencia = round(base_potencia + random.uniform(-4, 4), 2)
+        # Se ativado o botão na feira, injeta um pico alto de 1500W
+        if simulando_pico_feira:
+            potencia = round(1520.0 + random.uniform(-15, 15), 2)
+        else:
+            potencia = round(base_potencia + random.uniform(-4, 4), 2)
+
         corrente = round(potencia / 127, 4)
         salvar_leitura(corrente, potencia)
         time.sleep(3)
@@ -339,6 +355,17 @@ def api_leituras():
     dados = [dict(l) for l in reversed(linhas)]
     return jsonify(dados)
 
+# Rota para ligar/desligar o pico de 1500W na feira
+@app.route('/api/simular-pico', methods=['POST'])
+def api_simular_pico():
+    global simulando_pico_feira
+    dados = request.get_json() or {}
+    simulando_pico_feira = dados.get('ativar', not simulando_pico_feira)
+    return jsonify({
+        'sucesso': True,
+        'simulando_pico': simulando_pico_feira,
+        'mensagem': 'Pico de carga ativado (1500W)' if simulando_pico_feira else 'Carga normal restabelecida'
+    })
 
 @app.route('/api/stats')
 def api_stats():
@@ -377,7 +404,9 @@ def api_stats():
         'minimo': round(min(potencias), 2),
         'kwh_hoje': round(kwh_hoje, 3),
         'custo_hoje': round(custo_hoje, 2),
-        'limite_alerta': limite_alerta_watts
+        'limite_alerta': limite_alerta_watts,
+        'sensor_conectado': sensor_conectado_real,
+        'simulando_pico': simulando_pico_feira
     })
 
 
