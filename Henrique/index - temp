@@ -45,10 +45,9 @@
   :focus-visible{ outline:2px solid var(--green-soft); outline-offset:2px; }
   .container{ max-width:var(--maxw); margin:0 auto; padding:0 24px; }
   
-  /* --- PEQUENA CORREÇÃO AQUI --- */
   .screen{ display:none; }
   .screen.active{ display:block; }
-  .screen.active.full-center { display:flex; } /* Garante que a tela de login use flexbox só quando estiver ativa */
+  .screen.active.full-center { display:flex; }
   
   .view{ display:none; }
   .view.active{ display:block; }
@@ -58,7 +57,6 @@
     justify-content:center; gap:20px; text-align:center; padding:40px 20px;
     background: radial-gradient(circle at 50% -10%, #2F3D05 0%, #10140a 65%, #0a0c06 100%);
   }
-  /* ----------------------------- */
 
   .logo-circle{
     width:88px; height:88px; border-radius:44px; background:var(--green-strong);
@@ -71,7 +69,7 @@
   .login-card{ width:100%; max-width:400px; background:rgba(245,233,211,.05); border:1px solid var(--line); border-radius:24px; padding:32px 28px; text-align:left; }
   .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:18px; }
   .field label{ font-size:13px; font-weight:500; color:var(--tan); }
-  .field input, textarea, .support-input{
+  .field input, textarea, .support-input, select{
     width:100%; height:50px; border-radius:12px; border:1px solid transparent; background:var(--cream-2);
     padding:0 16px; font-size:15px; font-family:var(--font-ui); color:var(--brown);
   }
@@ -82,6 +80,16 @@
     color:var(--cream); font-weight:700; font-size:15px; cursor:pointer; transition:filter .15s;
   }
   .btn-primary:hover{ filter:brightness(1.12); }
+  .btn-danger{
+    background: #991B1B; color: #FEE2E2; border: none; border-radius: 12px; padding: 14px 20px;
+    font-weight: 700; cursor: pointer; transition: filter .15s;
+  }
+  .btn-danger:hover{ filter: brightness(1.15); }
+  .btn-secondary{
+    background: rgba(245,233,211,.15); color: var(--cream-2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 18px; font-weight: 600; cursor: pointer;
+  }
+  .btn-secondary:hover{ background: rgba(245,233,211,.25); }
   .link-center{ text-align:center; color:var(--tan); font-size:13px; margin-top:16px; }
 
   .navbar{
@@ -125,11 +133,16 @@
   .stat-label{ font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--white-7); font-weight:600; }
   .stat-value{ font-family:var(--font-display); font-weight:700; font-size:22px; color:var(--cream-2); margin-top:6px; }
 
+  /* Hero dinâmico (Normal e Alerta Vermelho) */
   .hero{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; margin-bottom:20px; }
   @media (max-width: 800px){ .hero{ grid-template-columns:1fr; } }
   .hero-main{
     position:relative; overflow:hidden; background:linear-gradient(160deg, var(--green-soft), #6c7d4c);
     border-radius:24px; padding:32px; box-shadow:0 20px 50px rgba(0,0,0,.35);
+    transition: background .4s ease;
+  }
+  .hero-main.alerta-ativo{
+    background: linear-gradient(160deg, #b91c1c, #7f1d1d) !important;
   }
   .hero-main::before{
     content:''; position:absolute; top:-80px; right:-80px; width:260px; height:260px; border-radius:50%;
@@ -189,11 +202,12 @@
 </head>
 <body>
 
-<!-- ============ LOGIN ============ -->
+  <!-- ============ LOGIN / CADASTRO ============ -->
   <section id="screen-login" class="screen active full-center">
     <div class="logo-circle">🌿</div>
     <h1 class="brand-title">EcoSense</h1>
     <p class="brand-sub">MONITOR DE ENERGIA</p>
+    
     <form id="form-auth" class="login-card">
       <div class="field">
         <label>E-mail</label>
@@ -221,7 +235,8 @@
       </p>
     </form>
   </section>
-  <!-- ============ APP (site) ============ -->
+
+  <!-- ============ APP ============ -->
   <div id="screen-app" class="screen">
     <nav class="navbar" id="navbar">
       <div class="navbar-inner">
@@ -231,6 +246,7 @@
           <button class="nav-link" data-view="reports" onclick="goToView('reports')">Relatórios</button>
           <button class="nav-link" data-view="alerts" onclick="goToView('alerts')">Alertas</button>
           <button class="nav-link" data-view="learn" onclick="goToView('learn')">Aprenda</button>
+          <button class="nav-link" data-view="settings" onclick="goToView('settings')">Configurações</button>
           <button class="nav-link" data-view="support" onclick="goToView('support')">Suporte</button>
         </div>
         <span class="status-pill"><span class="status-dot"></span>Sensor conectado</span>
@@ -244,7 +260,7 @@
         <div class="page-head"><h1>Painel em tempo real</h1><p>Consumo medido agora pelo seu sensor ESP32.</p></div>
 
         <div class="hero">
-          <div class="hero-main">
+          <div class="hero-main" id="hero-card">
             <span class="live-badge"><span class="pulse-dot"></span>AO VIVO</span>
             <div class="hero-num" id="dash-power">-- W</div>
             <div class="hero-sub" id="dash-current">Corrente: -- A · <span id="dash-updated">atualizado agora</span></div>
@@ -298,9 +314,9 @@
       <section id="view-alerts" class="view">
         <div class="page-head"><h1>Alertas</h1><p>Anomalias e avisos de consumo.</p></div>
 
-        <div class="banner-warn">
-          <b>⚠️ Consumo acima da média!</b>
-          Seu consumo hoje está <span id="alert-delta">--%</span> acima da média dos últimos 30 dias.
+        <div class="banner-warn" id="alert-banner-potencia" style="display:none;">
+          <b>⚠️ Alerta Crítico: Consumo Elevado!</b>
+          A potência instantânea ultrapassou o seu limite configurado de <span id="alert-limite-val">--</span> W.
         </div>
 
         <div class="grid grid-2col">
@@ -316,7 +332,7 @@
           </div>
           <div class="card alert-row">
             <div class="alert-left"><span class="sev-dot" style="background:var(--ok-2);"></span>
-              <div><div class="alert-title">Sensor conectado</div><div class="alert-desc">Comunicação serial ativa (9600 bps).</div></div>
+              <div><div class="alert-title">Sensor conectado</div><div class="alert-desc">Comunicação serial ativa (115200 bps).</div></div>
             </div><div class="alert-time">agora</div>
           </div>
         </div>
@@ -345,6 +361,61 @@
         </section>
       </section>
 
+      <!-- ---- SETTINGS (CONFIGURAÇÕES) ---- -->
+      <section id="view-settings" class="view">
+        <div class="page-head"><h1>Configurações do Usuário</h1><p>Gerencie sua localização, tarifas e segurança da conta.</p></div>
+
+        <div class="grid grid-2col" style="margin-bottom: 24px;">
+          <!-- Card de Localização e Tarifa -->
+          <div class="card">
+            <b style="font-size: 16px; display: block; margin-bottom: 16px;">📍 Localização & Tarifa de Energia</b>
+            <div class="field">
+              <label>CEP da Residência</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="cfg-cep" placeholder="37540-000" maxlength="9">
+                <button type="button" class="btn-secondary" id="btn-recalc-cep" style="white-space: nowrap;">Buscar CEP</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Tarifa Personalizada (R$/kWh)</label>
+              <input type="number" step="0.01" id="cfg-tarifa" placeholder="0.85">
+            </div>
+            <div class="field">
+              <label>Limite de Alerta de Alto Consumo (Watts)</label>
+              <input type="number" step="10" id="cfg-limite" placeholder="500">
+            </div>
+            <button class="btn-primary" id="btn-salvar-tarifa" type="button" style="height: 44px; margin-top: 8px;">Salvar Preferências</button>
+          </div>
+
+          <!-- Card de Dados de Acesso -->
+          <div class="card">
+            <b style="font-size: 16px; display: block; margin-bottom: 16px;">👤 Dados de Login</b>
+            <div class="field">
+              <label>E-mail Cadastrado</label>
+              <input type="email" id="cfg-email" placeholder="voce@email.com">
+            </div>
+            <div class="field">
+              <label>Nova Senha (deixe em branco se não quiser mudar)</label>
+              <input type="password" id="cfg-senha" placeholder="••••••••">
+            </div>
+            <button class="btn-primary" id="btn-salvar-acesso" type="button" style="height: 44px; margin-top: 8px;">Atualizar Dados</button>
+          </div>
+        </div>
+
+        <!-- Zona de Ações / Feira -->
+        <div class="card" style="border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.05);">
+          <b style="font-size: 16px; color: #FCA5A5; display: block; margin-bottom: 12px;">⚙️ Gerenciamento e Demonstração</b>
+          <p style="font-size: 13px; color: var(--white-7); margin-bottom: 18px;">
+            Ações administrativas para reiniciar testes durante a feira de ciências ou encerrar a sessão.
+          </p>
+          <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+            <button class="btn-secondary" id="btn-limpar-leituras" type="button">🔄 Zerar Histórico de Leituras</button>
+            <button class="btn-secondary" id="btn-logout" type="button">🚪 Sair da Conta (Logout)</button>
+            <button class="btn-danger" id="btn-excluir-conta" type="button">🗑️ Excluir Minha Conta</button>
+          </div>
+        </div>
+      </section>
+
       <!-- ---- SUPPORT ---- -->
       <section id="view-support" class="view">
         <div class="page-head"><h1>Suporte</h1><p>Como podemos ajudá-lo?</p></div>
@@ -367,7 +438,15 @@ const INTERVALO_ATUALIZACAO_MS = 3000;
 let cacheLeituras = [];
 let cacheStats = null;
 let modoCadastro = false;
-let tarifaAtualKwh = 0.85;
+
+// Estado do usuário logado
+let usuarioLogado = {
+  id: null,
+  email: '',
+  cep: '',
+  tarifa: 0.85,
+  limite_watts: 500.0
+};
 
 function goTo(nome){
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -390,7 +469,6 @@ function goToView(nome){
   window.scrollTo(0,0);
 }
 
-// Executa apenas quando todo o HTML terminar de carregar na tela
 document.addEventListener('DOMContentLoaded', () => {
 
   // 1. Olho da senha
@@ -427,18 +505,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 3. Envio do Formulário (Login / Cadastro)
+  // 3. Submissão de Formulário (Login / Cadastro)
   const formAuth = document.getElementById('form-auth');
   if (formAuth) {
     formAuth.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const emailEl = document.getElementById('auth-email');
-      const senhaEl = document.getElementById('auth-senha');
-      const cepEl = document.getElementById('auth-cep');
-
-      const email = emailEl ? emailEl.value : '';
-      const senha = senhaEl ? senhaEl.value : '';
-      const cep = cepEl ? cepEl.value : '';
+      const email = document.getElementById('auth-email').value;
+      const senha = document.getElementById('auth-senha').value;
+      const cep = document.getElementById('auth-cep').value;
 
       const url = modoCadastro ? '/api/cadastrar' : '/api/login';
       const payload = modoCadastro ? { email, senha, cep } : { email, senha };
@@ -461,7 +535,18 @@ document.addEventListener('DOMContentLoaded', () => {
           const toggle = document.getElementById('auth-toggle-btn');
           if (toggle) toggle.click();
         } else {
-          tarifaAtualKwh = data.tarifa || 0.85;
+          usuarioLogado.id = data.id;
+          usuarioLogado.email = data.email;
+          usuarioLogado.cep = data.cep;
+          usuarioLogado.tarifa = data.tarifa || 0.85;
+          usuarioLogado.limite_watts = data.limite_watts || 500.0;
+
+          // Preenche os campos da aba de configurações
+          document.getElementById('cfg-email').value = usuarioLogado.email;
+          document.getElementById('cfg-cep').value = usuarioLogado.cep;
+          document.getElementById('cfg-tarifa').value = usuarioLogado.tarifa;
+          document.getElementById('cfg-limite').value = usuarioLogado.limite_watts;
+
           goTo('app');
           goToView('dashboard');
           atualizarTudo();
@@ -473,7 +558,108 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. Suporte
+  // 4. Buscar e Atualizar Tarifa pelo CEP na aba Configurações
+  const btnRecalc = document.getElementById('btn-recalc-cep');
+  if (btnRecalc) {
+    btnRecalc.addEventListener('click', async () => {
+      const cep = document.getElementById('cfg-cep').value.replace('-', '').trim();
+      if (cep.length !== 8) {
+        alert('Digite um CEP válido com 8 dígitos.');
+        return;
+      }
+      try {
+        const r = await fetch(`/api/tarifa-cep?cep=${cep}`);
+        const d = await r.json();
+        if (d.erro) {
+          alert(d.erro);
+          return;
+        }
+        document.getElementById('cfg-tarifa').value = d.tarifa_kwh;
+        alert(`Região: ${d.cidade}/${d.uf} | Tarifa sugerida: R$ ${d.tarifa_kwh}/kWh`);
+      } catch (e) {
+        alert('Erro ao consultar o ViaCEP.');
+      }
+    });
+  }
+
+  // 5. Salvar Preferências de Tarifa / Limite
+  const btnSalvarTarifa = document.getElementById('btn-salvar-tarifa');
+  if (btnSalvarTarifa) {
+    btnSalvarTarifa.addEventListener('click', async () => {
+      const payload = {
+        id: usuarioLogado.id,
+        email: usuarioLogado.email,
+        cep: document.getElementById('cfg-cep').value,
+        tarifa: parseFloat(document.getElementById('cfg-tarifa').value),
+        limite_watts: parseFloat(document.getElementById('cfg-limite').value)
+      };
+      await atualizarPerfil(payload, 'Preferências de consumo salvas com sucesso!');
+    });
+  }
+
+  // 6. Salvar Dados de Acesso (E-mail / Senha)
+  const btnSalvarAcesso = document.getElementById('btn-salvar-acesso');
+  if (btnSalvarAcesso) {
+    btnSalvarAcesso.addEventListener('click', async () => {
+      const payload = {
+        id: usuarioLogado.id,
+        email: document.getElementById('cfg-email').value,
+        senha: document.getElementById('cfg-senha').value
+      };
+      await atualizarPerfil(payload, 'Dados de acesso atualizados!');
+      document.getElementById('cfg-senha').value = '';
+    });
+  }
+
+  // 7. Zerar Leituras
+  const btnLimpar = document.getElementById('btn-limpar-leituras');
+  if (btnLimpar) {
+    btnLimpar.addEventListener('click', async () => {
+      if (!confirm('Deseja realmente zerar todo o histórico de medições?')) return;
+      try {
+        const r = await fetch('/api/leituras/limpar', { method: 'POST' });
+        if (r.ok) {
+          alert('Histórico de medições zerado com sucesso!');
+          cacheLeituras = [];
+          atualizarTudo();
+        }
+      } catch (e) {
+        alert('Erro ao zerar histórico.');
+      }
+    });
+  }
+
+  // 8. Logout
+  const btnLogout = document.getElementById('btn-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      usuarioLogado = { id: null, email: '', cep: '', tarifa: 0.85, limite_watts: 500.0 };
+      goTo('login');
+    });
+  }
+
+  // 9. Excluir Conta
+  const btnExcluir = document.getElementById('btn-excluir-conta');
+  if (btnExcluir) {
+    btnExcluir.addEventListener('click', async () => {
+      if (!confirm('Tem certeza de que deseja excluir permanentemente sua conta?')) return;
+      try {
+        const r = await fetch('/api/usuario/excluir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: usuarioLogado.id })
+        });
+        if (r.ok) {
+          alert('Conta excluída com sucesso.');
+          goTo('login');
+        }
+      } catch (e) {
+        alert('Erro ao excluir conta.');
+      }
+    });
+  }
+
+  // Suporte
   const formSupport = document.getElementById('form-support');
   if (formSupport) {
     formSupport.addEventListener('submit', function(e){
@@ -486,6 +672,28 @@ document.addEventListener('DOMContentLoaded', () => {
   renderLearn();
 });
 
+async function atualizarPerfil(payload, msgSucesso) {
+  try {
+    const res = await fetch('/api/usuario/atualizar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      usuarioLogado.email = data.email;
+      usuarioLogado.cep = data.cep;
+      usuarioLogado.tarifa = data.tarifa;
+      usuarioLogado.limite_watts = data.limite_watts;
+      alert(msgSucesso);
+    } else {
+      alert(data.erro || 'Falha ao salvar');
+    }
+  } catch (err) {
+    alert('Erro ao conectar com o servidor.');
+  }
+}
+
 async function buscarLeituras(){
   try{ 
     const r = await fetch('/api/leituras'); 
@@ -495,7 +703,7 @@ async function buscarLeituras(){
 
 async function buscarStats(){
   try{ 
-    const r = await fetch(`/api/stats?tarifa=${tarifaAtualKwh}`); 
+    const r = await fetch('/api/stats'); 
     if (r.ok) cacheStats = await r.json(); 
   } catch(e){ console.error('Erro ao buscar stats:', e); }
 }
@@ -515,18 +723,34 @@ function renderDashboard(){
   const avg = document.getElementById('dash-avg');
   const maxEl = document.getElementById('dash-max');
   const tip = document.getElementById('dash-tip');
+  const heroCard = document.getElementById('hero-card');
+  const alertBanner = document.getElementById('alert-banner-potencia');
+  const alertVal = document.getElementById('alert-limite-val');
 
-  if (p) p.textContent = fmtW(cacheStats.ultima_potencia);
+  const potenciaAtual = cacheStats.ultima_potencia || 0.0;
+  const limiteWatts = cacheStats.limite_alerta || usuarioLogado.limite_watts || 500.0;
+
+  if (p) p.textContent = fmtW(potenciaAtual);
   if (c) c.innerHTML = `Corrente: ${fmtA(cacheStats.ultima_corrente)} · <span id="dash-updated">atualizado agora</span>`;
   if (k) k.textContent = (cacheStats.kwh_hoje || 0).toFixed(2) + ' kWh';
   if (cost) cost.textContent = 'R$ ' + (cacheStats.custo_hoje || 0).toFixed(2).replace('.', ',');
   if (avg) avg.textContent = fmtW(cacheStats.media);
   if (maxEl) maxEl.textContent = fmtW(cacheStats.maximo);
 
-  if (tip) {
-    tip.textContent = (cacheStats.ultima_potencia || 0) > (cacheStats.media || 0)
-      ? 'Sua potência atual está acima da média. Vale checar quais aparelhos estão ligados.'
-      : 'Seu consumo atual está estável, próximo da média das últimas leituras.';
+  // Alerta Visual de Consumo Alto
+  if (potenciaAtual > limiteWatts) {
+    if (heroCard) heroCard.classList.add('alerta-ativo');
+    if (alertBanner) alertBanner.style.display = 'block';
+    if (alertVal) alertVal.textContent = limiteWatts;
+    if (tip) tip.textContent = '⚠️ ALTO CONSUMO: Potência acima do seu limite configurado! Verifique aquecedores, ferros ou chuveiros.';
+  } else {
+    if (heroCard) heroCard.classList.remove('alerta-ativo');
+    if (alertBanner) alertBanner.style.display = 'none';
+    if (tip) {
+      tip.textContent = potenciaAtual > (cacheStats.media || 0)
+        ? 'Sua potência atual está acima da média. Vale checar quais aparelhos estão ligados.'
+        : 'Seu consumo atual está estável e dentro da faixa normal.';
+    }
   }
 
   const el = document.getElementById('dash-bars');
@@ -598,42 +822,6 @@ function renderReportChart(tipo){
   if (rMax) rMax.textContent = fmtW(maximo(valores));
   if (rMin) rMin.textContent = fmtW(minimo(valores));
   if (rExp) rExp.textContent = explicacao;
-  renderTrendBanner(valores);
-}
-
-function renderTrendBanner(valores){
-  const meio = Math.floor(valores.length / 2);
-  const primeira = media(valores.slice(0, meio || 1));
-  const segunda = media(valores.slice(meio));
-  const deltaPct = primeira ? ((segunda - primeira) / primeira) * 100 : 0;
-  const banner = document.getElementById('rep-trend-banner');
-  if (!banner) return;
-
-  if (Math.abs(deltaPct) < 1) {
-    banner.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:10px;">
-      <span style="font-size:20px;">➖</span>
-      <div><b style="font-size:13px;">Consumo estável</b><br><span style="font-size:11px; color:var(--white-7);">Sem variação relevante.</span></div>
-    </div>`;
-  } else if (deltaPct < 0) {
-    banner.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:10px;">
-      <span style="font-size:20px;">🎉</span>
-      <div><b style="font-size:13px; color:#10B981;">Você economizou ${Math.abs(deltaPct).toFixed(1)}%</b></div>
-    </div>`;
-  } else {
-    banner.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:10px;">
-      <span style="font-size:20px;">⚠️</span>
-      <div><b style="font-size:13px; color:#D97706;">Consumo subiu ${deltaPct.toFixed(1)}%</b></div>
-    </div>`;
-  }
-}
-
-function renderAlerts(){
-  if (!cacheStats || !cacheStats.media) return;
-  const deltaPct = Math.round(((cacheStats.ultima_potencia - cacheStats.media) / cacheStats.media) * 100);
-  const aDelta = document.getElementById('alert-delta');
-  const aDesc = document.getElementById('alert-peak-desc');
-  if (aDelta) aDelta.textContent = Math.max(deltaPct, 1) + '%';
-  if (aDesc) aDesc.textContent = `Pico de ${(cacheStats.maximo || 0).toFixed(2)} W registrado nas leituras.`;
 }
 
 const cartilhasData = [
@@ -670,7 +858,6 @@ async function atualizarTudo(){
   renderDashboard();
   const tabAtiva = document.querySelector('.tab.active');
   renderReportChart(tabAtiva ? tabAtiva.dataset.rep : 'diario');
-  renderAlerts();
 }
 </script>
 </body>
