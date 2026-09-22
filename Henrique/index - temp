@@ -471,8 +471,8 @@ let cacheLeituras = [];
 let cacheStats = null;
 let modoCadastro = false;
 
-// Estado do usuário logado
-let usuarioLogado = {
+// Recupera a sessão salva no navegador para não perder o ID se der F5
+let usuarioLogado = JSON.parse(localStorage.getItem('ecosense_user')) || {
   id: null,
   email: '',
   cep: '',
@@ -567,17 +567,22 @@ document.addEventListener('DOMContentLoaded', () => {
           const toggle = document.getElementById('auth-toggle-btn');
           if (toggle) toggle.click();
         } else {
-          usuarioLogado.id = data.id;
-          usuarioLogado.email = data.email;
-          usuarioLogado.cep = data.cep;
-          usuarioLogado.tarifa = data.tarifa || 0.85;
-          usuarioLogado.limite_watts = data.limite_watts || 500.0;
+          usuarioLogado = {
+            id: data.id,
+            email: data.email,
+            cep: data.cep,
+            tarifa: data.tarifa || 0.85,
+            limite_watts: data.limite_watts || 500.0
+          };
+
+          // Salva no navegador para nunca mais ficar com id null
+          localStorage.setItem('ecosense_user', JSON.stringify(usuarioLogado));
 
           // Preenche os campos da aba de configurações
-          document.getElementById('cfg-email').value = usuarioLogado.email;
-          document.getElementById('cfg-cep').value = usuarioLogado.cep;
-          document.getElementById('cfg-tarifa').value = usuarioLogado.tarifa;
-          document.getElementById('cfg-limite').value = usuarioLogado.limite_watts;
+          if (document.getElementById('cfg-email')) document.getElementById('cfg-email').value = usuarioLogado.email;
+          if (document.getElementById('cfg-cep')) document.getElementById('cfg-cep').value = usuarioLogado.cep;
+          if (document.getElementById('cfg-tarifa')) document.getElementById('cfg-tarifa').value = usuarioLogado.tarifa;
+          if (document.getElementById('cfg-limite')) document.getElementById('cfg-limite').value = usuarioLogado.limite_watts;
 
           goTo('app');
           goToView('dashboard');
@@ -665,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnLogout = document.getElementById('btn-logout');
   if (btnLogout) {
     btnLogout.addEventListener('click', () => {
+      localStorage.removeItem('ecosense_user');
       usuarioLogado = { id: null, email: '', cep: '', tarifa: 0.85, limite_watts: 500.0 };
       goTo('login');
     });
