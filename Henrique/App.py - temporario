@@ -98,65 +98,68 @@ def salvar_leitura(tensao, corrente, potencia):
 
 def ler_serial():
     global sensor_conectado_real
-    if serial is None:
-        sensor_conectado_real = False
-        modo_demonstracao()
-        return
-
-    try:
-        ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
-        print(f'[serial] Conectado em {PORTA_SERIAL}')
-        sensor_conectado_real = True
-    except Exception as e:
-        print(f'[serial] ESP32 não detectada em {PORTA_SERIAL} ({e}). Ativando modo demonstração...')
-        sensor_conectado_real = False
-        modo_demonstracao()
-        return
-        
-
     while True:
+        if serial is None:
+            sensor_conectado_real = False
+            modo_demonstracao()
+            time.sleep(2)
+            continue
+
         try:
-            linha = ser.readline().decode('utf-8', errors='ignore').strip()
-            if not linha:
-                continue
+            ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
+            print(f'[serial] Conectado com sucesso em {PORTA_SERIAL}')
+            sensor_conectado_real = True
+            
+            while True:
+                try:
+                    linha = ser.readline().decode('utf-8', errors='ignore').strip()
+                    if not linha:
+                        continue
 
-            # Adicione esta linha para ver os valores brutos no ecrã do Thonny:
-            print(f"[DADO BRUTO ESP32]: {linha}")
+                    # Captura o formato da sua ESP32: "Tensao: 248.18 V | Corrente: 3.44 A | Potencia: 854.34 W"
+                    m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
+                    m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
+                    m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
 
-            if ',' in linha:
-                partes = [p.strip() for p in linha.split(',')]
-                if len(partes) >= 3:
-                    val0 = float(partes[0])
-                    val1 = float(partes[1])
-                    val2 = float(partes[2])
+                    if m_tensao and m_corrente and m_potencia:
+                        tensao = float(m_tensao.group(1))
+                        corrente = float(m_corrente.group(1))
+                        potencia = float(m_potencia.group(1))
 
-                    # Identifica automaticamente se a tensão veio no primeiro ou segundo campo
-                    if val0 > 50:  # val0 é Tensão (~227V)
-                        tensao = val0
-                        corrente = val1
-                    else:          # val0 é Corrente (~0.8A)
-                        corrente = val0
-                        tensao = val1
+                        # Filtro para desligado
+                        if corrente <= 0.05:
+                            corrente = 0.0
+                            potencia = 0.0
 
-                    potencia = val2
+                        salvar_leitura(tensao, corrente, potencia)
+                        print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.2f} A | {potencia:.2f} W')
+                        continue
 
-                    # Filtro de ruído quando o circuito estiver desligado
-                    if corrente <= 0.05:
-                        corrente = 0.0
-                        potencia = 0.0
+                    # Compatibilidade para formato separado por vírgula caso mude
+                    if ',' in linha:
+                        partes = [p.strip() for p in linha.split(',')]
+                        if len(partes) >= 3:
+                            val0 = float(partes[0])
+                            val1 = float(partes[1])
+                            val2 = float(partes[2])
+                            tensao = val0 if val0 > 50 else val1
+                            corrente = val1 if val0 > 50 else val0
+                            potencia = val2
+                            salvar_leitura(tensao, corrente, potencia)
 
-                    salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense real] {tensao:.1f} V | {corrente:.2f} A | {potencia:.2f} W')
-                    continue
+                except Exception as err_leitura:
+                    print(f'[serial] Perda de comunicação na porta: {err_leitura}')
+                    break  # Sai do loop interno para fechar e reabrir a porta
 
-            m_corrente = re.search(r'Corrente\s*=\s*([\d.]+)\s*A', linha)
-            m_potencia = re.search(r'Potencia\s*=\s*([\d.]+)\s*W', linha)
-            if m_corrente and m_potencia:
-                salvar_leitura(float(m_corrente.group(1)), float(m_potencia.group(1)))
+            try:
+                ser.close()
+            except:
+                pass
 
         except Exception as e:
-            print(f'[serial] Erro lendo linha serial: {e}')
-            time.sleep(1)
+            sensor_conectado_real = False
+            # Fica tentando reconectar sem travar o app
+            time.sleep(2)
 
 
 def modo_demonstracao():
