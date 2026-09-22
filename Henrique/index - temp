@@ -724,6 +724,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function atualizarPerfil(payload, msgSucesso) {
+  if (!payload.id) {
+    alert('Sessão expirada. Faça login novamente para atualizar suas configurações.');
+    goTo('login');
+    return;
+  }
   try {
     const res = await fetch('/api/usuario/atualizar', {
       method: 'POST',
@@ -736,7 +741,9 @@ async function atualizarPerfil(payload, msgSucesso) {
       usuarioLogado.cep = data.cep;
       usuarioLogado.tarifa = data.tarifa;
       usuarioLogado.limite_watts = data.limite_watts;
+      localStorage.setItem('ecosense_user', JSON.stringify(usuarioLogado));
       alert(msgSucesso);
+      renderDashboard();
     } else {
       alert(data.erro || 'Falha ao salvar');
     }
