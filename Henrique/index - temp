@@ -759,6 +759,30 @@ function minimo(l){ return l.length ? Math.min(...l) : 0; }
 function fmtW(v){ return (v || 0).toFixed(2)+' W'; }
 function fmtA(v){ return (v || 0).toFixed(2)+' A'; }
 
+let modoHero = 'potencia'; // 'potencia', 'tensao' ou 'corrente'
+
+function trocarModoHero(novoModo) {
+  modoHero = novoModo;
+  ['potencia', 'tensao', 'corrente'].forEach(m => {
+    const btn = document.getElementById('btn-show-' + m);
+    if (btn) {
+      if (m === modoHero) {
+        btn.style.background = 'var(--cream-2)';
+        btn.style.color = 'var(--bg-darker)';
+      } else {
+        btn.style.background = 'rgba(245,233,211,.15)';
+        btn.style.color = 'var(--cream-2)';
+      }
+    }
+  });
+  renderDashboard();
+}
+
+function alternarModoHero() {
+  if (modoHero === 'potencia') trocarModoHero('tensao');
+  else if (modoHero === 'tensao') trocarModoHero('corrente');
+  else trocarModoHero('potencia');
+}
 function renderDashboard(){
   if (!cacheStats) return;
   const p = document.getElementById('dash-power');
@@ -773,10 +797,29 @@ function renderDashboard(){
   const alertVal = document.getElementById('alert-limite-val');
 
   const potenciaAtual = cacheStats.ultima_potencia || 0.0;
+  const tensaoAtual = cacheStats.ultima_tensao || 227.0;
+  const correnteAtual = cacheStats.ultima_corrente || 0.80;
   const limiteWatts = cacheStats.limite_alerta || usuarioLogado.limite_watts || 500.0;
 
-  if (p) p.textContent = fmtW(potenciaAtual);
-  if (c) c.innerHTML = `Corrente: ${fmtA(cacheStats.ultima_corrente)} · <span id="dash-updated">atualizado agora</span>`;
+  // Atualiza o valor principal conforme a aba selecionada
+  const heroTag = document.getElementById('hero-modo-tag');
+  if (p) {
+    if (modoHero === 'potencia') {
+      p.textContent = fmtW(potenciaAtual);
+      if (heroTag) heroTag.textContent = 'POTÊNCIA';
+    } else if (modoHero === 'tensao') {
+      p.textContent = tensaoAtual.toFixed(1) + ' V';
+      if (heroTag) heroTag.textContent = 'TENSÃO';
+    } else {
+      p.textContent = fmtA(correnteAtual);
+      if (heroTag) heroTag.textContent = 'CORRENTE';
+    }
+  }
+
+  // Linha de detalhe secundária com todos os valores explícitos
+  if (c) {
+    c.innerHTML = `⚡ ${fmtW(potenciaAtual)} · 🔌 ${tensaoAtual.toFixed(1)} V · 🔋 ${fmtA(correnteAtual)}`;
+  }
   if (k) k.textContent = (cacheStats.kwh_hoje || 0).toFixed(2) + ' kWh';
   if (cost) cost.textContent = 'R$ ' + (cacheStats.custo_hoje || 0).toFixed(2).replace('.', ',');
   if (avg) avg.textContent = fmtW(cacheStats.media);
