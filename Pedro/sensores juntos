@@ -1,42 +1,195 @@
 #include <Arduino.h>
 #include <ZMPT101B.h>
-#include "EmonLib.h"
+
+// =====================================================
+// ZMPT101B - TENSÃO
+// =====================================================
 
 const int PIN_ZMPT = 34;
-const float SENSITIVITY = 140.3;
+
+const float SENSITIVITY = 154.8;
+
 ZMPT101B voltageSensor(PIN_ZMPT, 60.0);
 
+
+// =====================================================
+// SCT-013 - CORRENTE
+// =====================================================
+
 const int PIN_SCT = 32;
-const float CAL_SCT = 7.44;
-EnergyMonitor SCT013;
 
-const float LIMIAR_TENSAO = 220.0;
-const float LIMIAR_CORRENTE = 0.18;
+const float VREF_ADC = 3.3;
 
-void setup() {
-    Serial.begin(115200);
-    analogReadResolution(12);
-    voltageSensor.setSensitivity(SENSITIVITY);
-    SCT013.current(PIN_SCT, CAL_SCT);
-    delay(2000);
+const int ADC_RESOLUTION = 4095;
+
+const float FATOR_CALIBRACAO_SCT = 304;
+
+
+// =====================================================
+// LIMIARES
+// =====================================================
+
+const float LIMIAR_TENSAO = 215.0;
+
+const float LIMIAR_CORRENTE = 0.05;
+
+
+// =====================================================
+// FUNÇÃO PARA CALCULAR CORRENTE RMS
+// =====================================================
+
+float calcularCorrenteRMS(int pino, int duracaoMs) {
+
+  long somaADC = 0;
+
+  unsigned long totalAmostras = 0;
+
+  double somaQuadrados = 0;
+
+  unsigned long tempoInicio = millis();
+
+
+  // Calcular valor médio do ADC
+
+  while (millis() - tempoInicio < (unsigned long)duracaoMs) {
+
+    somaADC += analogRead(pino);
+
+    totalAmostras++;
+  }
+
+
+  if (totalAmostras == 0) {
+    return 0.0;
+  }
+
+
+  float adcMedio = (float)somaADC / totalAmostras;
+
+
+  // Calcular RMS da componente AC
+
+  tempoInicio = millis();
+
+  totalAmostras = 0;
+
+  while (millis() - tempoInicio < (unsigned long)duracaoMs) {
+
+    float valorAC = (float)analogRead(pino) - adcMedio;
+
+    somaQuadrados += (valorAC * valorAC);
+
+    totalAmostras++;
+  }
+
+
+  if (totalAmostras == 0) {
+    return 0.0;
+  }
+
+
+  float rmsADC = sqrt(somaQuadrados / totalAmostras);
+
+
+  // Converter ADC para tensão
+
+  float tensaoRMS =
+      (rmsADC / (float)ADC_RESOLUTION) * VREF_ADC;
+
+
+  // Converter para corrente
+
+  return tensaoRMS * FATOR_CALIBRACAO_SCT;
 }
 
+
+// =====================================================
+// SETUP
+// =====================================================
+
+void setup() {
+
+  Serial.begin(115200);
+
+  analogReadResolution(12);
+
+  #if defined(ESP32)
+
+    analogSetPinAttenuation(PIN_SCT, ADC_11db);
+
+  #endif
+
+  voltageSensor.setSensitivity(SENSITIVITY);
+
+  delay(2000);
+}
+
+
+// =====================================================
+// LOOP
+// =====================================================
+
 void loop() {
-    float tensao = voltageSensor.getRmsVoltage();
-    double corrente = SCT013.calcIrms(1480);
 
-    if (tensao < LIMIAR_TENSAO) tensao = 0.0;
-    if (corrente < LIMIAR_CORRENTE) corrente = 0.0;
+  // ---------------------------------------------------
+  // MEDIR TENSÃO
+  // ---------------------------------------------------
 
-    float potencia = tensao * corrente;
+  float tensao = voltageSensor.getRmsVoltage();
 
-    Serial.print(tensao, 2);
-    Serial.print(",");
-    Serial.print(corrente, 4);
-    Serial.print(",");
-    Serial.print(potencia, 2);
-    Serial.print(",");
-    Serial.println("ESP32_01");
 
-    delay(1000);
+  // ---------------------------------------------------
+  // MEDIR CORRENTE
+  // ---------------------------------------------------
+
+  float correnteBruta =
+      calcularCorrenteRMS(PIN_SCT, 500);
+
+
+  // ---------------------------------------------------
+  // APLICAR LIMIAR DE TENSÃO
+  // ---------------------------------------------------
+
+  if (tensao < LIMIAR_TENSAO) {
+
+    tensao = 0.0;
+
+    correnteBruta = 0.0;
+  }
+
+
+  // ---------------------------------------------------
+  // APLICAR LIMIAR DE CORRENTE
+  // ---------------------------------------------------
+
+  else if (correnteBruta < LIMIAR_CORRENTE) {
+
+    correnteBruta = 0.0;
+  }
+
+
+  // ---------------------------------------------------
+  // CALCULAR POTÊNCIA
+  // ---------------------------------------------------
+
+  float potencia = tensao * correnteBruta;
+
+
+  // ---------------------------------------------------
+  // MOSTRAR RESULTADOS
+  // ---------------------------------------------------
+
+  Serial.print("Tensao: ");
+  Serial.print(tensao, 2);
+
+  Serial.print(" V | Corrente: ");
+  Serial.print(correnteBruta, 5);
+
+  Serial.print(" A | Potencia: ");
+  Serial.print(potencia, 2);
+
+  Serial.println(" W");
+
+
+  delay(500);
 }
