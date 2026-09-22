@@ -134,22 +134,25 @@ def ler_serial():
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
 
-                if m_tensao and m_corrente and m_potencia:
+                if m_tensao and m_corrente:
                     tensao = float(m_tensao.group(1))
-                    corrente = float(m_corrente.group(1))
-                    potencia = float(m_potencia.group(1))
+                    corrente_bruta = float(m_corrente.group(1))
 
-                    # 1. Filtro de circuito desligado (elimina ruído de fundo do sensor SCT-013)
-                    if corrente <= 0.05 or tensao < 50.0:
+                    # Fator de calibração: ajusta a leitura da porta USB da Raspberry para a média real
+                    # Se vier ~3.0A na USB da Rasp, 3.0 * 0.26 = ~0.78A
+                    FATOR_AJUSTE_SCT = 0.26
+
+                    # 1. Filtro para circuito desligado
+                    if corrente_bruta <= 0.08 or tensao < 50.0:
                         corrente = 0.0
                         potencia = 0.0
-
-                    # 2. Recalcula a potência ativa coerente com os valores medidos instantâneos
-                    if corrente > 0.0:
+                    else:
+                        # 2. Aplica calibração proporcional sobre a medição física real do sensor
+                        corrente = round(corrente_bruta * FATOR_AJUSTE_SCT, 3)
                         potencia = round(tensao * corrente, 2)
 
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
+                    print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A (Bruto: {corrente_bruta:.2f} A) | {potencia:.2f} W')
                     continue
 
             except Exception as err:
