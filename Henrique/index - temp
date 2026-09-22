@@ -271,14 +271,25 @@
     <main>
       <!-- ---- DASHBOARD ---- -->
       <section id="view-dashboard" class="view active">
-        <div class="page-head"><h1>Painel em tempo real</h1><p>Consumo medido agora pelo seu sensor ESP32.</p></div>
+        <div class="page-head">
+          <h1>Painel em tempo real</h1>
+          <p>Consumo medido agora pelo seu sensor EcoSense.</p>
+        </div>
+
+        <!-- Seletor clicável de visualização -->
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <button type="button" class="btn-secondary active" id="btn-show-potencia" onclick="trocarModoHero('potencia')" style="padding: 8px 16px;">⚡ Potência (W)</button>
+          <button type="button" class="btn-secondary" id="btn-show-tensao" onclick="trocarModoHero('tensao')" style="padding: 8px 16px;">🔌 Tensão (V)</button>
+          <button type="button" class="btn-secondary" id="btn-show-corrente" onclick="trocarModoHero('corrente')" style="padding: 8px 16px;">🔋 Corrente (A)</button>
+        </div>
 
         <div class="hero">
-          <div class="hero-main" id="hero-card">
-            <span class="live-badge"><span class="pulse-dot"></span>AO VIVO</span>
+          <!-- Card interativo com clique para alternar métricas -->
+          <div class="hero-main" id="hero-card" onclick="alternarModoHero()" style="cursor: pointer;" title="Clique para alternar entre Potência, Tensão e Corrente">
+            <span class="live-badge"><span class="pulse-dot"></span>AO VIVO · <span id="hero-modo-tag">POTÊNCIA</span> (toque para alternar)</span>
             <div class="hero-num" id="dash-power">-- W</div>
-            <div class="hero-sub" id="dash-current">Corrente: -- A · <span id="dash-updated">atualizado agora</span></div>
-            <div class="hero-tip">🌱 <span id="dash-tip">Calculando dica personalizada...</span></div>
+            <div class="hero-sub" id="dash-current">Tensão: 227.0 V · Corrente: 0.80 A · <span id="dash-updated">atualizado agora</span></div>
+            <div class="hero-tip">🌱 <span id="dash-tip">Calculando status do sensor...</span></div>
           </div>
           <div class="hero-side">
             <div class="card"><div class="stat-label">Consumo hoje</div><div class="stat-value" id="dash-kwh">-- kWh</div></div>
