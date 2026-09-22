@@ -128,6 +128,8 @@ def ler_serial():
                 if not linha:
                     continue
 
+                # Extrai os três valores com precisão a partir das etiquetas da string
+                # Exemplo: Tensao: 231.60 V | Corrente: 0.74134 A | Potencia: 171.69 W
                 m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
@@ -137,27 +139,21 @@ def ler_serial():
                     corrente = float(m_corrente.group(1))
                     potencia = float(m_potencia.group(1))
 
-                    if corrente <= 0.05:
+                    # 1. Filtro de circuito desligado (elimina ruído de fundo do sensor SCT-013)
+                    if corrente <= 0.05 or tensao < 50.0:
                         corrente = 0.0
                         potencia = 0.0
 
+                    # 2. Recalcula a potência ativa coerente com os valores medidos instantâneos
+                    if corrente > 0.0:
+                        potencia = round(tensao * corrente, 2)
+
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.2f} A | {potencia:.2f} W')
+                    print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
                     continue
 
-                if ',' in linha:
-                    partes = [p.strip() for p in linha.split(',')]
-                    if len(partes) >= 3:
-                        val0 = float(partes[0])
-                        val1 = float(partes[1])
-                        val2 = float(partes[2])
-                        tensao = val0 if val0 > 50 else val1
-                        corrente = val1 if val0 > 50 else val0
-                        potencia = val2
-                        salvar_leitura(tensao, corrente, potencia)
-
             except Exception as err:
-                print(f'[serial] Perda de sinal: {err}')
+                print(f'[serial] Perda de comunicação na porta: {err}')
                 sensor_conectado_real = False
                 break
 
