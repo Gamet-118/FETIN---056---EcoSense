@@ -2,95 +2,41 @@
 #include <ZMPT101B.h>
 #include "EmonLib.h"
 
-// =====================================================
-// ZMPT101B - TENSÃO
-// =====================================================
-
 const int PIN_ZMPT = 34;
-
-const float SENSITIVITY = 146.6f;
-
+const float SENSITIVITY = 140.3;
 ZMPT101B voltageSensor(PIN_ZMPT, 60.0);
 
-
-// =====================================================
-// SCT013 - CORRENTE
-// =====================================================
-
 const int PIN_SCT = 32;
-
 const float CAL_SCT = 7.44;
-
 EnergyMonitor SCT013;
 
-
-// =====================================================
-// SETUP
-// =====================================================
+const float LIMIAR_TENSAO = 220.0;
+const float LIMIAR_CORRENTE = 0.18;
 
 void setup() {
-
     Serial.begin(115200);
-
-    // ADC da ESP32 em 12 bits
     analogReadResolution(12);
-
-    // Configuração/calibração do ZMPT101B
     voltageSensor.setSensitivity(SENSITIVITY);
-
-    // Configuração/calibração do SCT013
     SCT013.current(PIN_SCT, CAL_SCT);
-
     delay(2000);
 }
 
-
-// =====================================================
-// LOOP
-// =====================================================
-
 void loop() {
-
-    // =================================================
-    // MEDIR TENSÃO
-    // =================================================
-
     float tensao = voltageSensor.getRmsVoltage();
-
-
-    // =================================================
-    // MEDIR CORRENTE
-    // =================================================
-
     double corrente = SCT013.calcIrms(1480);
 
-
-    // =================================================
-    // CALCULAR POTÊNCIA
-    // =================================================
+    if (tensao < LIMIAR_TENSAO) tensao = 0.0;
+    if (corrente < LIMIAR_CORRENTE) corrente = 0.0;
 
     float potencia = tensao * corrente;
 
-
-    // =================================================
-    // ENVIAR DADOS PARA A RASPBERRY
-    // =================================================
-
     Serial.print(tensao, 2);
     Serial.print(",");
-
     Serial.print(corrente, 4);
     Serial.print(",");
-
     Serial.print(potencia, 2);
     Serial.print(",");
-
     Serial.println("ESP32_01");
-
-
-    // =================================================
-    // AGUARDAR 1 SEGUNDO
-    // =================================================
 
     delay(1000);
 }
