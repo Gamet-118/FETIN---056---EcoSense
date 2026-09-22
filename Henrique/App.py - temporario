@@ -112,12 +112,16 @@ def ler_serial():
         sensor_conectado_real = False
         modo_demonstracao()
         return
+        
 
     while True:
         try:
             linha = ser.readline().decode('utf-8', errors='ignore').strip()
             if not linha:
                 continue
+
+            # Adicione esta linha para ver os valores brutos no ecrã do Thonny:
+            print(f"[DADO BRUTO ESP32]: {linha}")
 
             if ',' in linha:
                 partes = [p.strip() for p in linha.split(',')]
