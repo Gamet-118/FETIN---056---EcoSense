@@ -106,15 +106,21 @@ def ler_serial():
             continue
 
         try:
-            ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
-            print(f'[serial] Conectado com sucesso em {PORTA_SERIAL}')
-            sensor_conectado_real = True
-            
-            while True:
+            ser = None
+            for p in PORTAS_POSSIVEIS:
                 try:
-                    linha = ser.readline().decode('utf-8', errors='ignore').strip()
-                    if not linha:
-                        continue
+                    ser = serial.Serial(p, BAUD_RATE, timeout=2)
+                    print(f'[serial] Conectado com sucesso em {p}')
+                    sensor_conectado_real = True
+                    break
+                except Exception:
+                    continue
+
+        if ser is None:
+            sensor_conectado_real = False
+            # Se não achou porta, aguarda 2 segundos antes de tentar de novo
+            time.sleep(2)
+            continue
 
                     # Captura o formato da sua ESP32: "Tensao: 248.18 V | Corrente: 3.44 A | Potencia: 854.34 W"
                     m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
