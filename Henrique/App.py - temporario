@@ -15,7 +15,7 @@ try:
 except ImportError:
     serial = None
 
-PORTA_SERIAL = '/dev/ttyUSB0'  # Altere para /dev/ttyACM0 se necessário
+PORTAS_POSSIVEIS = ['/dev/ttyUSB0', '/dev/ttyACM0', '/dev/ttyUSB1', '/dev/ttyACM1']
 BAUD_RATE = 115200
 DB_PATH = 'ecosense.db'
 
