@@ -66,6 +66,7 @@ def init_db():
     conn.execute('''
         CREATE TABLE IF NOT EXISTS leituras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tensao REAL DEFAULT 227.0,
             corrente REAL NOT NULL,
             potencia REAL NOT NULL,
             timestamp TEXT NOT NULL
@@ -85,11 +86,11 @@ def init_db():
     conn.close()
 
 
-def salvar_leitura(corrente, potencia):
+def salvar_leitura(tensao, corrente, potencia):
     conn = get_db()
     conn.execute(
-        'INSERT INTO leituras (corrente, potencia, timestamp) VALUES (?, ?, ?)',
-        (corrente, potencia, datetime.now().isoformat())
+        'INSERT INTO leituras (tensao, corrente, potencia, timestamp) VALUES (?, ?, ?, ?)',
+        (tensao, corrente, potencia, datetime.now().isoformat())
     )
     conn.commit()
     conn.close()
@@ -119,17 +120,29 @@ def ler_serial():
                 continue
 
             if ',' in linha:
-                partes = linha.split(',')
+                partes = [p.strip() for p in linha.split(',')]
                 if len(partes) >= 3:
-                    corrente = float(partes[0])
-                    potencia = float(partes[2])
-                    
-                    if corrente <= 0.80:
+                    val0 = float(partes[0])
+                    val1 = float(partes[1])
+                    val2 = float(partes[2])
+
+                    # Identifica automaticamente se a tensão veio no primeiro ou segundo campo
+                    if val0 > 50:  # val0 é Tensão (~227V)
+                        tensao = val0
+                        corrente = val1
+                    else:          # val0 é Corrente (~0.8A)
+                        corrente = val0
+                        tensao = val1
+
+                    potencia = val2
+
+                    # Filtro de ruído quando o circuito estiver desligado
+                    if corrente <= 0.05:
                         corrente = 0.0
                         potencia = 0.0
 
-                    salvar_leitura(corrente, potencia)
-                    print(f'[sensor real] {corrente:.2f} A / {potencia:.2f} W')
+                    salvar_leitura(tensao, corrente, potencia)
+                    print(f'[EcoSense real] {tensao:.1f} V | {corrente:.2f} A | {potencia:.2f} W')
                     continue
 
             m_corrente = re.search(r'Corrente\s*=\s*([\d.]+)\s*A', linha)
@@ -144,16 +157,16 @@ def ler_serial():
 
 def modo_demonstracao():
     global simulando_pico_feira
-    base_potencia = 181.0
     while True:
-        # Se ativado o botão na feira, injeta um pico alto de 1500W
+        tensao = round(227.0 + random.uniform(-2.5, 2.5), 1)
+        
         if simulando_pico_feira:
-            potencia = round(1520.0 + random.uniform(-15, 15), 2)
+            corrente = round(6.6 + random.uniform(-0.3, 0.3), 2)
         else:
-            potencia = round(base_potencia + random.uniform(-4, 4), 2)
+            corrente = round(0.80 + random.uniform(-0.05, 0.05), 2)
 
-        corrente = round(potencia / 127, 4)
-        salvar_leitura(corrente, potencia)
+        potencia = round(tensao * corrente, 2)
+        salvar_leitura(tensao, corrente, potencia)
         time.sleep(3)
 
 
@@ -396,8 +409,10 @@ def api_stats():
     kwh_hoje = (media * HORAS_USO_ESTIMADAS) / 1000
     custo_hoje = kwh_hoje * tarifa_global_kwh
 
+    tensao_val = round(ultima['tensao'], 1) if 'tensao' in ultima.keys() and ultima['tensao'] else 227.0
     return jsonify({
         'ultima_potencia': round(ultima['potencia'], 2),
+        'ultima_tensao': tensao_val,
         'ultima_corrente': round(ultima['corrente'], 2),
         'media': round(media, 2),
         'maximo': round(max(potencias), 2),
