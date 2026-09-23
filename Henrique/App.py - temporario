@@ -405,48 +405,45 @@ def api_simular_pico():
 
 @app.route('/api/stats')
 def api_stats():
+    global kwh_acumulado_total
     conn = get_db()
     linhas = conn.execute(
-        'SELECT corrente, potencia FROM leituras ORDER BY id DESC LIMIT 200'
+        'SELECT tensao, corrente, potencia FROM leituras ORDER BY id DESC LIMIT 60'
     ).fetchall()
     conn.close()
 
     if not linhas:
         return jsonify({
             'ultima_potencia': 0.0,
+            'ultima_tensao': 0.0,
             'ultima_corrente': 0.0,
             'media': 0.0,
             'maximo': 0.0,
             'minimo': 0.0,
-            'kwh_hoje': 0.0,
-            'custo_hoje': 0.0,
-            'limite_alerta': limite_alerta_watts
+            'kwh_hoje': round(kwh_acumulado_total, 4),
+            'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
+            'limite_alerta': limite_alerta_watts,
+            'sensor_conectado': sensor_conectado_real
         })
 
     potencias = [l['potencia'] for l in linhas]
+    potencias_ativas = [p for p in potencias if p > 5.0]
+    media_val = sum(potencias_ativas) / len(potencias_ativas) if potencias_ativas else 0.0
     ultima = linhas[0]
 
-    media = sum(potencias) / len(potencias)
-    HORAS_USO_ESTIMADAS = 8
-    
-    kwh_hoje = (media * HORAS_USO_ESTIMADAS) / 1000
-    custo_hoje = kwh_hoje * tarifa_global_kwh
-
-    tensao_val = round(ultima['tensao'], 1) if 'tensao' in ultima.keys() and ultima['tensao'] else 227.0
     return jsonify({
         'ultima_potencia': round(ultima['potencia'], 2),
-        'ultima_tensao': tensao_val,
-        'ultima_corrente': round(ultima['corrente'], 2),
-        'media': round(media, 2),
+        'ultima_tensao': round(ultima['tensao'], 1),
+        'ultima_corrente': round(ultima['corrente'], 3),
+        'media': round(media_val, 2),
         'maximo': round(max(potencias), 2),
         'minimo': round(min(potencias), 2),
-        'kwh_hoje': round(kwh_hoje, 3),
-        'custo_hoje': round(custo_hoje, 2),
+        'kwh_hoje': round(kwh_acumulado_total, 4),
+        'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
         'limite_alerta': limite_alerta_watts,
         'sensor_conectado': sensor_conectado_real,
         'simulando_pico': simulando_pico_feira
     })
-
 
 @app.route('/')
 def home():
