@@ -15,23 +15,43 @@ try:
 except ImportError:
     serial = None
 
-PORTA_SERIAL = '/dev/ttyUSB0'  # Se não conectar, teste '/dev/ttyACM0'
+PORTAS_POSSIVEIS = ['/dev/ttyUSB0', '/dev/ttyACM0', '/dev/ttyUSB1', '/dev/ttyACM1']
 BAUD_RATE = 115200
 DB_PATH = 'ecosense.db'
 
+# Status de conexão real e simulação de pico para a feira
+sensor_conectado_real = False
+simulando_pico_feira = False
+
+TARIFA_PADRAO = 0.85
+
 TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
+limite_alerta_watts = 500.0  # Limite padrão para disparo de alerta de alto consumo
 
-TARIFAS_ESTADO = {
-    'MG': 0.89,
-    'SP': 0.84,
-    'RJ': 1.05,
-    'PR': 0.81,
-    'SC': 0.73,
-    'RS': 0.88,
-    'BA': 0.94,
+TARIFA_PADRAO = 0.85
+tarifa_global_kwh = TARIFA_PADRAO
+limite_alerta_watts = 500.0
+
+DISTRIBUIDORAS_CIDADES = {
+    'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
+    'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
+    'Ribeirão Preto': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
+    'Santos': {'empresa': 'CPFL Piratininga', 'tarifa': 0.85},
+    'Rio de Janeiro': {'empresa': 'Light', 'tarifa': 1.06},
+    'Niterói': {'empresa': 'Enel RJ', 'tarifa': 1.09},
+    'Poços de Caldas': {'empresa': 'DMEE', 'tarifa': 0.79},
 }
 
+DISTRIBUIDORAS_ESTADO = {
+    'MG': {'empresa': 'CEMIG', 'tarifa': 0.89},
+    'SP': {'empresa': 'CPFL / Enel', 'tarifa': 0.85},
+    'RJ': {'empresa': 'Light / Enel RJ', 'tarifa': 1.05},
+    'PR': {'empresa': 'COPEL', 'tarifa': 0.81},
+    'SC': {'empresa': 'CELESC', 'tarifa': 0.73},
+    'RS': {'empresa': 'CEEE Equatorial / RGE', 'tarifa': 0.88},
+    'BA': {'empresa': 'Neoenergia Coelba', 'tarifa': 0.94},
+}
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 
@@ -46,6 +66,7 @@ def init_db():
     conn.execute('''
         CREATE TABLE IF NOT EXISTS leituras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tensao REAL DEFAULT 227.0,
             corrente REAL NOT NULL,
             potencia REAL NOT NULL,
             timestamp TEXT NOT NULL
@@ -57,75 +78,100 @@ def init_db():
             email TEXT UNIQUE NOT NULL,
             senha TEXT NOT NULL,
             cep TEXT NOT NULL,
-            tarifa REAL NOT NULL
+            tarifa REAL NOT NULL,
+            limite_watts REAL DEFAULT 500.0
         )
     ''')
     conn.commit()
     conn.close()
 
 
-def salvar_leitura(corrente, potencia):
+def salvar_leitura(tensao, corrente, potencia):
     conn = get_db()
     conn.execute(
-        'INSERT INTO leituras (corrente, potencia, timestamp) VALUES (?, ?, ?)',
-        (corrente, potencia, datetime.now().isoformat())
+        'INSERT INTO leituras (tensao, corrente, potencia, timestamp) VALUES (?, ?, ?, ?)',
+        (tensao, corrente, potencia, datetime.now().isoformat())
     )
     conn.commit()
     conn.close()
 
 
 def ler_serial():
-    if serial is None:
-        modo_demonstracao()
-        return
-
-    try:
-        ser = serial.Serial(PORTA_SERIAL, BAUD_RATE, timeout=2)
-        print(f'[serial] conectado em {PORTA_SERIAL}')
-    except Exception as e:
-        print(f'[serial] não foi possível abrir {PORTA_SERIAL} ({e}). Ativando modo demonstração...')
-        modo_demonstracao()
-        return
-
+    global sensor_conectado_real
+    portas = ['/dev/ttyUSB1', '/dev/ttyUSB0', '/dev/ttyACM0']
+    
     while True:
-        try:
-            linha = ser.readline().decode('utf-8', errors='ignore').strip()
-            if not linha:
+        if serial is None:
+            sensor_conectado_real = False
+            modo_demonstracao()
+            time.sleep(2)
+            continue
+
+        ser = None
+        for p in portas:
+            try:
+                ser = serial.Serial(p, BAUD_RATE, timeout=2)
+                print(f'[serial] Conectado com sucesso em {p}')
+                sensor_conectado_real = True
+                break
+            except Exception:
                 continue
 
-            if ',' in linha:
-                partes = linha.split(',')
-                if len(partes) >= 3:
-                    corrente = float(partes[0])
-                    potencia = float(partes[2])
-                    
-                    if corrente <= 0.80:
-                        corrente = 0.0
-                        potencia = 0.0
+        if ser is None:
+            sensor_conectado_real = False
+            time.sleep(2)
+            continue
 
-                    salvar_leitura(corrente, potencia)
-                    print(f'[sensor real] {corrente:.2f} A / {potencia:.2f} W')
+        while True:
+            try:
+                linha = ser.readline().decode('utf-8', errors='ignore').strip()
+                if not linha:
                     continue
 
-            m_corrente = re.search(r'Corrente\s*=\s*([\d.]+)\s*A', linha)
-            m_potencia = re.search(r'Potencia\s*=\s*([\d.]+)\s*W', linha)
-            if m_corrente and m_potencia:
-                salvar_leitura(float(m_corrente.group(1)), float(m_potencia.group(1)))
+                # Extrai os três valores com precisão a partir das etiquetas da string
+                # Exemplo: Tensao: 231.60 V | Corrente: 0.74134 A | Potencia: 171.69 W
+                m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
+                m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
+                m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
 
-        except Exception as e:
-            print(f'[serial] erro lendo linha: {e}')
-            time.sleep(1)
+                if m_tensao and m_corrente and m_potencia:
+                    tensao = float(m_tensao.group(1))
+                    corrente = float(m_corrente.group(1))
+                    potencia = float(m_potencia.group(1))
+
+                    salvar_leitura(tensao, corrente, potencia)
+                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.3f} A | {potencia:.2f} W')
+                    continue
+            except Exception as err:
+                print(f'[serial] Perda de comunicação na porta: {err}')
+                sensor_conectado_real = False
+                break
+
+        try:
+            ser.close()
+        except Exception:
+            pass
+        time.sleep(2)
 
 
 def modo_demonstracao():
-    base_potencia = 181.0
+    global simulando_pico_feira
     while True:
-        potencia = round(base_potencia + random.uniform(-4, 4), 2)
-        corrente = round(potencia / 127, 4)
-        salvar_leitura(corrente, potencia)
+        tensao = round(227.0 + random.uniform(-2.5, 2.5), 1)
+        
+        if simulando_pico_feira:
+            corrente = round(6.6 + random.uniform(-0.3, 0.3), 2)
+        else:
+            corrente = round(0.80 + random.uniform(-0.05, 0.05), 2)
+
+        potencia = round(tensao * corrente, 2)
+        salvar_leitura(tensao, corrente, potencia)
         time.sleep(3)
 
 
+# =====================================================
+# ROTAS DE AUTENTICAÇÃO E CONFIGURAÇÃO
+# =====================================================
 @app.route('/api/cadastrar', methods=['POST'])
 def api_cadastrar():
     dados = request.get_json() or {}
@@ -149,8 +195,8 @@ def api_cadastrar():
     try:
         conn = get_db()
         conn.execute(
-            'INSERT INTO usuarios (email, senha, cep, tarifa) VALUES (?, ?, ?, ?)',
-            (email, senha_hash, cep, tarifa)
+            'INSERT INTO usuarios (email, senha, cep, tarifa, limite_watts) VALUES (?, ?, ?, ?, ?)',
+            (email, senha_hash, cep, tarifa, 500.0)
         )
         conn.commit()
         conn.close()
@@ -161,7 +207,7 @@ def api_cadastrar():
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    global tarifa_global_kwh
+    global tarifa_global_kwh, limite_alerta_watts
     dados = request.get_json() or {}
     email = dados.get('email', '').strip().lower()
     senha = dados.get('senha', '').strip()
@@ -172,15 +218,106 @@ def api_login():
 
     if usuario and check_password_hash(usuario['senha'], senha):
         tarifa_global_kwh = usuario['tarifa']
+        limite_alerta_watts = usuario['limite_watts'] if 'limite_watts' in usuario.keys() else 500.0
         return jsonify({
             'sucesso': True,
+            'id': usuario['id'],
             'email': usuario['email'],
             'cep': usuario['cep'],
-            'tarifa': usuario['tarifa']
+            'tarifa': usuario['tarifa'],
+            'limite_watts': limite_alerta_watts
         })
     return jsonify({'erro': 'E-mail ou senha incorretos.'}), 401
 
 
+@app.route('/api/usuario/atualizar', methods=['POST'])
+def api_atualizar_usuario():
+    global tarifa_global_kwh, limite_alerta_watts
+    dados = request.get_json() or {}
+    user_id = dados.get('id')
+    novo_email = dados.get('email', '').strip().lower()
+    nova_senha = dados.get('senha', '').strip()
+    novo_cep = dados.get('cep', '').replace('-', '').strip()
+    nova_tarifa = dados.get('tarifa')
+    novo_limite = dados.get('limite_watts')
+
+    if not user_id or not novo_email:
+        return jsonify({'erro': 'Identificador de usuário ou e-mail inválido.'}), 400
+
+    conn = get_db()
+    usuario = conn.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone()
+    if not usuario:
+        conn.close()
+        return jsonify({'erro': 'Usuário não encontrado.'}), 404
+
+    # Atualiza tarifa se informada ou se o CEP foi modificado
+    tarifa_final = usuario['tarifa']
+    if nova_tarifa is not None:
+        try:
+            tarifa_final = float(nova_tarifa)
+        except ValueError:
+            pass
+    elif novo_cep and novo_cep != usuario['cep']:
+        try:
+            r = requests.get(f'https://viacep.com.br/ws/{novo_cep}/json/', timeout=4).json()
+            if 'uf' in r:
+                tarifa_final = TARIFAS_ESTADO.get(r['uf'], TARIFA_PADRAO)
+        except Exception:
+            pass
+
+    limite_final = float(novo_limite) if novo_limite else usuario['limite_watts']
+    senha_final = generate_password_hash(nova_senha) if nova_senha else usuario['senha']
+    cep_final = novo_cep if len(novo_cep) == 8 else usuario['cep']
+
+    try:
+        conn.execute('''
+            UPDATE usuarios 
+            SET email = ?, senha = ?, cep = ?, tarifa = ?, limite_watts = ?
+            WHERE id = ?
+        ''', (novo_email, senha_final, cep_final, tarifa_final, limite_final, user_id))
+        conn.commit()
+        conn.close()
+
+        tarifa_global_kwh = tarifa_final
+        limite_alerta_watts = limite_final
+        return jsonify({
+            'sucesso': True,
+            'email': novo_email,
+            'cep': cep_final,
+            'tarifa': tarifa_final,
+            'limite_watts': limite_final
+        })
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'erro': 'Este novo e-mail já pertence a outra conta.'}), 409
+
+
+@app.route('/api/usuario/excluir', methods=['POST'])
+def api_excluir_usuario():
+    dados = request.get_json() or {}
+    user_id = dados.get('id')
+    if not user_id:
+        return jsonify({'erro': 'ID não fornecido.'}), 400
+
+    conn = get_db()
+    conn.execute('DELETE FROM usuarios WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'sucesso': True, 'mensagem': 'Conta excluída com sucesso.'})
+
+
+@app.route('/api/leituras/limpar', methods=['POST'])
+def api_limpar_leituras():
+    conn = get_db()
+    conn.execute('DELETE FROM leituras')
+    conn.commit()
+    conn.close()
+    return jsonify({'sucesso': True, 'mensagem': 'Histórico de leituras zerado.'})
+
+
+# =====================================================
+# ROTAS DE LEITURAS E PAINEL
+# =====================================================
 @app.route('/api/tarifa-cep', methods=['GET'])
 def obter_tarifa_por_cep():
     global tarifa_global_kwh
@@ -193,15 +330,28 @@ def obter_tarifa_por_cep():
         if 'erro' in resp:
             return jsonify({'erro': 'CEP não encontrado'}), 404
 
-        uf = resp.get('uf', 'SP')
         cidade = resp.get('localidade', '')
-        tarifa_global_kwh = TARIFAS_ESTADO.get(uf, TARIFA_PADRAO)
+        uf = resp.get('uf', 'SP')
+
+        if cidade in DISTRIBUIDORAS_CIDADES:
+            dados = DISTRIBUIDORAS_CIDADES[cidade]
+            empresa = dados['empresa']
+            tarifa = dados['tarifa']
+        elif uf in DISTRIBUIDORAS_ESTADO:
+            dados = DISTRIBUIDORAS_ESTADO[uf]
+            empresa = dados['empresa']
+            tarifa = dados['tarifa']
+        else:
+            empresa = 'Concessionária Padrão'
+            tarifa = TARIFA_PADRAO
+
+        tarifa_global_kwh = tarifa
 
         return jsonify({
             'cidade': cidade,
             'uf': uf,
-            'tarifa_kwh': tarifa_global_kwh,
-            'bandeira': 'Bandeira Verde'
+            'empresa': empresa,
+            'tarifa_kwh': tarifa
         })
     except Exception as e:
         return jsonify({'erro': str(e), 'tarifa_kwh': tarifa_global_kwh}), 500
@@ -217,6 +367,17 @@ def api_leituras():
     dados = [dict(l) for l in reversed(linhas)]
     return jsonify(dados)
 
+# Rota para ligar/desligar o pico de 1500W na feira
+@app.route('/api/simular-pico', methods=['POST'])
+def api_simular_pico():
+    global simulando_pico_feira
+    dados = request.get_json() or {}
+    simulando_pico_feira = dados.get('ativar', not simulando_pico_feira)
+    return jsonify({
+        'sucesso': True,
+        'simulando_pico': simulando_pico_feira,
+        'mensagem': 'Pico de carga ativado (1500W)' if simulando_pico_feira else 'Carga normal restabelecida'
+    })
 
 @app.route('/api/stats')
 def api_stats():
@@ -227,7 +388,16 @@ def api_stats():
     conn.close()
 
     if not linhas:
-        return jsonify({'erro': 'ainda não há leituras salvas'}), 404
+        return jsonify({
+            'ultima_potencia': 0.0,
+            'ultima_corrente': 0.0,
+            'media': 0.0,
+            'maximo': 0.0,
+            'minimo': 0.0,
+            'kwh_hoje': 0.0,
+            'custo_hoje': 0.0,
+            'limite_alerta': limite_alerta_watts
+        })
 
     potencias = [l['potencia'] for l in linhas]
     ultima = linhas[0]
@@ -238,14 +408,19 @@ def api_stats():
     kwh_hoje = (media * HORAS_USO_ESTIMADAS) / 1000
     custo_hoje = kwh_hoje * tarifa_global_kwh
 
+    tensao_val = round(ultima['tensao'], 1) if 'tensao' in ultima.keys() and ultima['tensao'] else 227.0
     return jsonify({
         'ultima_potencia': round(ultima['potencia'], 2),
+        'ultima_tensao': tensao_val,
         'ultima_corrente': round(ultima['corrente'], 2),
         'media': round(media, 2),
         'maximo': round(max(potencias), 2),
         'minimo': round(min(potencias), 2),
         'kwh_hoje': round(kwh_hoje, 3),
         'custo_hoje': round(custo_hoje, 2),
+        'limite_alerta': limite_alerta_watts,
+        'sensor_conectado': sensor_conectado_real,
+        'simulando_pico': simulando_pico_feira
     })
 
 
