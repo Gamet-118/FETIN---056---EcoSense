@@ -317,13 +317,9 @@
         <div class="page-head"><h1>Relatórios</h1><p>Acompanhe o consumo ao longo do tempo.</p></div>
 
         <div class="tabs">
-          <button class="tab active" data-rep="diario" onclick="setReportTab('diario')">Diário</button>
-          <button class="tab" data-rep="semanal" onclick="setReportTab('semanal')">Semanal</button>
-          <button class="tab" data-rep="mensal" onclick="setReportTab('mensal')">Mensal</button>
-          <button class="tab" data-rep="semestral" onclick="setReportTab('semestral')">Semestral</button>
-          <button class="tab" data-rep="anual" onclick="setReportTab('anual')">Anual</button>
+          <button class="tab active" data-rep="diario" onclick="setReportTab('diario')">Tempo Real (Hoje)</button>
+          <button class="tab" data-rep="semanal" onclick="setReportTab('semanal')">Histórico Semanal</button>
         </div>
-
         <div class="card" style="margin-bottom:16px;">
           <b id="rep-chart-title" style="font-size:14px;">Consumo por hora</b>
           <div class="bars" id="rep-bars" style="margin-top:16px; height:200px;"></div>
