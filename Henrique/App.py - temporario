@@ -507,6 +507,16 @@ def home():
 
 if __name__ == '__main__':
     init_db()
+    # Recupera o consumo prévio salvo no SQLite para não zerar se reiniciar
+    try:
+        conn = get_db()
+        row = conn.execute('SELECT COUNT(*), AVG(potencia) FROM leituras').fetchone()
+        if row and row[0] > 0:
+            kwh_acumulado_total = round((row[1] * (row[0] * 3.0 / 3600.0)) / 1000.0, 4)
+        conn.close()
+    except Exception:
+        pass
+
     thread_serial = threading.Thread(target=ler_serial, daemon=True)
     thread_serial.start()
     app.run(host='0.0.0.0', port=5000, debug=False)
