@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRecalc.addEventListener('click', async () => {
       const cep = document.getElementById('cfg-cep').value.replace(/\D/g, '').trim();
       if (cep.length !== 8) {
-        alert('Digite um CEP válido com 8 dígitos.');
+        alert('Digite um CEP válido com 8 dígitos (ex: 37540000).');
         return;
       }
       try {
@@ -636,14 +636,34 @@ document.addEventListener('DOMContentLoaded', () => {
           alert(d.erro);
           return;
         }
+
+        // Atualiza campos visuais da aba Configurações
         document.getElementById('cfg-tarifa').value = d.tarifa_kwh;
+
+        // Atualiza a sessão local
         usuarioLogado.tarifa = d.tarifa_kwh;
         usuarioLogado.cep = cep;
         localStorage.setItem('ecosense_user', JSON.stringify(usuarioLogado));
-        alert(`Região: ${d.cidade}/${d.uf} (${d.empresa})\nTarifa aplicada: R$ ${d.tarifa_kwh}/kWh`);
+
+        // Salva direto no banco de dados do usuário se estiver logado
+        if (usuarioLogado.id) {
+          await fetch('/api/usuario/atualizar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: usuarioLogado.id,
+              email: usuarioLogado.email,
+              cep: cep,
+              tarifa: d.tarifa_kwh,
+              limite_watts: usuarioLogado.limite_watts
+            })
+          });
+        }
+
+        alert(`Localizado: ${d.cidade}/${d.uf} (${d.empresa})\nTarifa aplicada com sucesso: R$ ${d.tarifa_kwh.toFixed(2)}/kWh`);
         renderDashboard();
       } catch (e) {
-        alert('Erro ao consultar o CEP.');
+        alert('Erro ao buscar o CEP.');
       }
     });
   }
