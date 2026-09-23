@@ -320,9 +320,26 @@
           <button class="tab active" data-rep="diario" onclick="setReportTab('diario')">Tempo Real (Hoje)</button>
           <button class="tab" data-rep="semanal" onclick="setReportTab('semanal')">Histórico Semanal</button>
         </div>
-        <div class="card" style="margin-bottom:16px;">
-          <b id="rep-chart-title" style="font-size:14px;">Consumo por hora</b>
-          <div class="bars" id="rep-bars" style="margin-top:16px; height:200px;"></div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1.2fr; gap: 16px; margin-bottom: 16px;">
+          <div class="card">
+            <b id="rep-chart-title" style="font-size:15px; display:block; margin-bottom: 8px;">Consumo</b>
+            <div class="bars" id="rep-bars" style="margin-top:24px; height:210px; align-items: flex-end;"></div>
+          </div>
+
+          <div class="card" style="overflow-x: auto;">
+            <b style="font-size:14px; display:block; margin-bottom: 10px;">📋 Detalhamento</b>
+            <table style="width: 100%; font-size: 12px; text-align: left; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--line); color: var(--tan);">
+                  <th style="padding: 6px 4px;">Data/Dia</th>
+                  <th style="padding: 6px 4px;">Valor</th>
+                  <th style="padding: 6px 4px;">Custo</th>
+                </tr>
+              </thead>
+              <tbody id="rep-tabela-corpo"></tbody>
+            </table>
+          </div>
         </div>
 
         <div id="rep-trend-banner" style="margin-bottom:12px;"></div>
