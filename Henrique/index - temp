@@ -908,48 +908,58 @@ function setReportTab(tipo){
   renderReportChart(tipo);
 }
 
-function renderReportChart(tipo) {
-  if (!cacheStats) return;
+async function renderReportChart(tipo) {
   const container = document.getElementById('rep-bars');
+  const tabelaCorpo = document.getElementById('rep-tabela-corpo');
   const titleEl = document.getElementById('rep-chart-title');
-  let labels = [], valores = [], explicacao = '';
+  if (!container) return;
+
+  let labels = [], valores = [], custos = [], datas = [], explicacao = '';
 
   if (tipo === 'diario') {
-    titleEl.textContent = 'Leituras instantâneas do sensor (Watts)';
-    const ultimas = cacheLeituras.slice(-20);
+    titleEl.textContent = 'Leituras em Tempo Real da Bancada (Watts)';
+    const ultimas = cacheLeituras.slice(-14);
     valores = ultimas.length ? ultimas.map(l => l.potencia) : [0];
     labels = ultimas.map((_, i) => `${i + 1}ª`);
-    explicacao = 'Monitoramento instantâneo da bancada. As barras sobem quando a carga é ligada e descem quando desligada.';
+    datas = ultimas.map(l => (l.timestamp ? l.timestamp.substring(11, 19) : '--:--:--'));
+    custos = valores.map(v => 'R$ ' + ((v / 1000) * (usuarioLogado.tarifa || 0.85)).toFixed(3));
+    explicacao = 'Variação instantânea registrada pelas medições dos sensores na bancada.';
   } else {
-    titleEl.textContent = 'Consumo estimado nos últimos 7 dias (kWh)';
-    const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Hoje'];
-    // Força um valor mínimo realista para o gráfico não ficar vazio na feira
-    const consumoBase = Math.max(cacheStats.kwh_hoje, 0.45);
-    labels = dias;
-    // Histórico crível ancorado no valor do dia atual
-    valores = [
-      parseFloat((consumoBase * 0.85).toFixed(2)),
-      parseFloat((consumoBase * 1.10).toFixed(2)),
-      parseFloat((consumoBase * 0.95).toFixed(2)),
-      parseFloat((consumoBase * 1.25).toFixed(2)),
-      parseFloat((consumoBase * 0.70).toFixed(2)),
-      parseFloat((consumoBase * 0.50).toFixed(2)),
-      parseFloat(consumoBase.toFixed(2))
-    ];
-    explicacao = 'Projeção semanal baseada no perfil de carga registrado pelo protótipo.';
+    titleEl.textContent = 'Consumo Semanal Consolidado (kWh)';
+    try {
+      const res = await fetch('/api/historico-semanal');
+      const dados = await res.json();
+      labels = dados.map(d => d.dia);
+      valores = dados.map(d => d.kwh);
+      datas = dados.map(d => d.data);
+      custos = dados.map(d => 'R$ ' + d.custo.toFixed(2));
+      explicacao = 'Consumo dos últimos 7 dias baseado na data do calendário e tarifa configurada.';
+    } catch (e) {
+      console.error('Erro ao buscar histórico semanal:', e);
+    }
   }
 
   const max = Math.max(...valores, 1);
-  if (container) {
-    container.innerHTML = valores.map((v, i) => {
-      const h = Math.max(6, Math.round((v / max) * 100));
-      const unidade = tipo === 'diario' ? 'W' : 'kWh';
-      return `
-        <div class="bar-col" title="${v} ${unidade}">
-          <div class="bar" style="height:${h}%; background: var(--ok-2);"></div>
-          <div class="bar-label">${labels[i]}</div>
-        </div>`;
-    }).join('');
+  const unidade = tipo === 'diario' ? 'W' : 'kWh';
+
+  container.innerHTML = valores.map((v, i) => {
+    const h = Math.max(8, Math.round((v / max) * 100));
+    return `
+      <div class="bar-col" style="position: relative;" title="${datas[i]} - ${v} ${unidade}">
+        <span style="font-size: 10px; font-weight: bold; color: var(--cream-2); margin-bottom: 4px;">${v > 0 ? v : '0'}</span>
+        <div class="bar" style="height:${h}%; background: var(--ok-2); width: 85%; border-radius: 4px 4px 0 0;"></div>
+        <div class="bar-label" style="margin-top: 6px; font-size: 10px;">${labels[i]}</div>
+      </div>`;
+  }).join('');
+
+  if (tabelaCorpo) {
+    tabelaCorpo.innerHTML = valores.map((v, i) => `
+      <tr style="border-bottom: 1px solid rgba(245,233,211,0.06);">
+        <td style="padding: 6px 4px; font-weight: 500;">${datas[i]} <span style="font-size: 10px; color: var(--white-7);">(${labels[i]})</span></td>
+        <td style="padding: 6px 4px; color: #10B981; font-weight: 600;">${v} ${unidade}</td>
+        <td style="padding: 6px 4px; color: var(--cream);">${custos[i]}</td>
+      </tr>
+    `).join('');
   }
 
   const rAvg = document.getElementById('rep-avg');
