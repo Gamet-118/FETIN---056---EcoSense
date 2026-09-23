@@ -140,13 +140,23 @@ def ler_serial():
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
 
-                if m_tensao and m_corrente and m_potencia:
-                    tensao = float(m_tensao.group(1))
-                    corrente = float(m_corrente.group(1))
-                    potencia = float(m_potencia.group(1))
+                if m_tensao and m_corrente:
+                    tensao_bruta = float(m_tensao.group(1))
+                    corrente_bruta = float(m_corrente.group(1))
+
+                    # 1. Se desligou a bancada (tensão baixa ou corrente residual)
+                    if tensao_bruta < 80.0 or corrente_bruta <= 0.08:
+                        tensao = 0.0
+                        corrente = 0.0
+                        potencia = 0.0
+                    else:
+                        # 2. Bancada ligada: ajusta escala real (reduz ~249V para ~223V e calibra a corrente da USB)
+                        tensao = round(tensao_bruta * 0.895, 1)
+                        corrente = round(corrente_bruta * 0.26, 3)
+                        potencia = round(tensao * corrente, 2)
 
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.4f} A | {potencia:.2f} W')
+                    print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
                     continue
 
             except Exception as err:
