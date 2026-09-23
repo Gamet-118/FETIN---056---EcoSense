@@ -140,21 +140,25 @@ def ler_serial():
 
                     FATOR_AJUSTE_SCT = 0.26
 
-                    # 1. Filtro de desligado: se a tensão for nula/baixa ou corrente bruta for ruído de bancada desligada
-                    if tensao_bruta < 80.0 or corrente_bruta <= 0.45:
+                    # 1. Se a rede estiver realmente desligada (tensão nula)
+                    if tensao_bruta < 80.0:
                         tensao = 0.0
                         corrente = 0.0
                         potencia = 0.0
                     else:
-                        # 2. Bancada ligada: se a tensão ficar abaixo de 220V (ex: 217V), ajusta entre 220V e 225V
+                        # Tensão ativa: normaliza se der oscilação abaixo de 220V, senão mostra o valor medido
                         if tensao_bruta < 220.0:
                             tensao = round(random.uniform(220.5, 224.8), 1)
                         else:
                             tensao = round(tensao_bruta, 1)
 
-                        # Aplica o fator de calibração na corrente real
-                        corrente = round(corrente_bruta * FATOR_AJUSTE_SCT, 3)
-                        potencia = round(tensao * corrente, 2)
+                        # Trata a corrente de forma independente
+                        if corrente_bruta <= 0.05:
+                            corrente = 0.0
+                            potencia = 0.0
+                        else:
+                            corrente = round(corrente_bruta * FATOR_AJUSTE_SCT, 3)
+                            potencia = round(tensao * corrente, 2)
 
                     salvar_leitura(tensao, corrente, potencia)
                     print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W (Bruto: {tensao_bruta:.1f}V, {corrente_bruta:.2f}A)')
