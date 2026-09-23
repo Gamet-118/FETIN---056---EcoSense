@@ -635,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   // 5. Salvar Preferências de Tarifa / Limite
   const btnSalvarTarifa = document.getElementById('btn-salvar-tarifa');
   if (btnSalvarTarifa) {
