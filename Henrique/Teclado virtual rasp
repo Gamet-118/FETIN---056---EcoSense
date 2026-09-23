@@ -25,3 +25,31 @@ HOME_URL="https://www.debian.org/"
 SUPPORT_URL="https://www.debian.org/support"
 BUG_REPORT_URL="https://bugs.debian.org/"
 
+
+[Unit]
+Description=Servidor EcoSense Flask
+After=network.target
+
+[Service]
+User=pedro
+WorkingDirectory=/home/pedro/Documents
+ExecStart=/usr/bin/python3 /home/pedro/Documents/app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable ecosense.service
+sudo systemctl start ecosense.service
+sudo systemctl status ecosense.service
+
+
+[Desktop Entry]
+Type=Application
+Name=EcoSense Kiosk
+Exec=bash -c "sleep 6 && chromium-browser --noerrdialogs --disable-infobars --kiosk http://localhost:5000"
+
+
