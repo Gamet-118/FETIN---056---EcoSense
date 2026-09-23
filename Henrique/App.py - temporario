@@ -103,14 +103,26 @@ def ler_serial():
     while True:
         if serial is None:
             sensor_conectado_real = False
-            modo_demonstracao()
             time.sleep(2)
             continue
 
         ser = None
         for p in portas:
             try:
-                ser = serial.Serial(p, BAUD_RATE, timeout=2)
+                # Configura a porta serie desativando o controlo por hardware
+                ser = serial.Serial(
+                    p, 
+                    BAUD_RATE, 
+                    timeout=2, 
+                    dsrdtr=False, 
+                    rtscts=False
+                )
+                # Impede que a ESP32 seja forcada a entrar em modo de reset/bootloader
+                ser.dtr = False
+                ser.rts = False
+                time.sleep(0.5)
+                ser.reset_input_buffer()
+                
                 print(f'[serial] Conectado com sucesso em {p}')
                 sensor_conectado_real = True
                 break
@@ -128,8 +140,7 @@ def ler_serial():
                 if not linha:
                     continue
 
-                # Extrai os três valores com precisão a partir das etiquetas da string
-                # Exemplo: Tensao: 231.60 V | Corrente: 0.74134 A | Potencia: 171.69 W
+                # Extrai os dados no formato: Tensao: 223.78 V | Corrente: 0.60584 A | Potencia: 135.57 W
                 m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
@@ -140,10 +151,11 @@ def ler_serial():
                     potencia = float(m_potencia.group(1))
 
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.3f} A | {potencia:.2f} W')
+                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.4f} A | {potencia:.2f} W')
                     continue
+
             except Exception as err:
-                print(f'[serial] Perda de comunicação na porta: {err}')
+                print(f'[serial] Perda de comunicacao: {err}')
                 sensor_conectado_real = False
                 break
 
