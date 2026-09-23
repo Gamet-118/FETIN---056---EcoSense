@@ -32,8 +32,13 @@ kwh_acumulado_total = 0.0
 ultimo_tempo_leitura = None
 # --------------------------------------------------------
 
+kwh_acumulado_total = 0.0
+ultimo_tempo_leitura = None
+
 DISTRIBUIDORAS_CIDADES = {
-DISTRIBUIDORAS_CIDADES = {
+    'Santa Rita do Sapucaí': {'empresa': 'CEMIG', 'tarifa': 0.89},
+    'Pouso Alegre': {'empresa': 'CEMIG', 'tarifa': 0.89},
+    'Itajubá': {'empresa': 'CEMIG', 'tarifa': 0.89},
     'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
     'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
     'Ribeirão Preto': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
@@ -52,6 +57,7 @@ DISTRIBUIDORAS_ESTADO = {
     'RS': {'empresa': 'CEEE Equatorial / RGE', 'tarifa': 0.88},
     'BA': {'empresa': 'Neoenergia Coelba', 'tarifa': 0.94},
 }
+TARIFAS_ESTADO = {k: v['tarifa'] for k, v in DISTRIBUIDORAS_ESTADO.items()}
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 
