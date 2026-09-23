@@ -19,7 +19,6 @@ PORTAS_POSSIVEIS = ['/dev/ttyUSB0', '/dev/ttyACM0', '/dev/ttyUSB1', '/dev/ttyACM
 BAUD_RATE = 115200
 DB_PATH = 'ecosense.db'
 
-# Status de conexão real e simulação de pico para a feira
 sensor_conectado_real = False
 simulando_pico_feira = False
 
@@ -27,30 +26,12 @@ TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
 limite_alerta_watts = 500.0
 
-# --- ADICIONADO: Variáveis para acumular energia real ---
 kwh_acumulado_total = 0.0
 ultimo_tempo_leitura = None
-# --------------------------------------------------------
-
-kwh_acumulado_total = 0.0
-ultimo_tempo_leitura = None
-
-DISTRIBUIDORAS_CIDADES = {
-    'Santa Rita do Sapucaí': {'empresa': 'CEMIG', 'tarifa': 0.89},
-    'Pouso Alegre': {'empresa': 'CEMIG', 'tarifa': 0.89},
-    'Itajubá': {'empresa': 'CEMIG', 'tarifa': 0.89},
-    'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
-    'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
-    'Ribeirão Preto': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
-    'Santos': {'empresa': 'CPFL Piratininga', 'tarifa': 0.85},
-    'Rio de Janeiro': {'empresa': 'Light', 'tarifa': 1.06},
-    'Niterói': {'empresa': 'Enel RJ', 'tarifa': 1.09},
-    'Poços de Caldas': {'empresa': 'DMEE', 'tarifa': 0.79},
-}
 
 DISTRIBUIDORAS_ESTADO = {
     'MG': {'empresa': 'CEMIG', 'tarifa': 0.89},
-    'SP': {'empresa': 'CPFL / Enel', 'tarifa': 0.85},
+    'SP': {'empresa': 'CPFL / Enel', 'tarifa': 0.83},
     'RJ': {'empresa': 'Light / Enel RJ', 'tarifa': 1.05},
     'PR': {'empresa': 'COPEL', 'tarifa': 0.81},
     'SC': {'empresa': 'CELESC', 'tarifa': 0.73},
@@ -58,6 +39,7 @@ DISTRIBUIDORAS_ESTADO = {
     'BA': {'empresa': 'Neoenergia Coelba', 'tarifa': 0.94},
 }
 TARIFAS_ESTADO = {k: v['tarifa'] for k, v in DISTRIBUIDORAS_ESTADO.items()}
+
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 
@@ -95,11 +77,9 @@ def init_db():
 def salvar_leitura(tensao, corrente, potencia):
     global kwh_acumulado_total, ultimo_tempo_leitura
     agora = datetime.now()
-    
-    # Integração de energia em tempo real: Energia (kWh) = Potência (kW) * Tempo (horas)
+
     if ultimo_tempo_leitura is not None:
         delta_segundos = (agora - ultimo_tempo_leitura).total_seconds()
-        # Limita o delta para evitar saltos se a leitura pausar por muito tempo
         if 0 < delta_segundos < 10:
             kwh_incremento = (potencia / 1000.0) * (delta_segundos / 3600.0)
             kwh_acumulado_total += kwh_incremento
@@ -117,7 +97,7 @@ def salvar_leitura(tensao, corrente, potencia):
 def ler_serial():
     global sensor_conectado_real
     portas = ['/dev/ttyUSB1', '/dev/ttyUSB0', '/dev/ttyACM0']
-    
+
     while True:
         if serial is None:
             sensor_conectado_real = False
@@ -127,20 +107,18 @@ def ler_serial():
         ser = None
         for p in portas:
             try:
-                # Configura a porta serie desativando o controlo por hardware
                 ser = serial.Serial(
-                    p, 
-                    BAUD_RATE, 
-                    timeout=2, 
-                    dsrdtr=False, 
+                    p,
+                    BAUD_RATE,
+                    timeout=2,
+                    dsrdtr=False,
                     rtscts=False
                 )
-                # Impede que a ESP32 seja forcada a entrar em modo de reset/bootloader
                 ser.dtr = False
                 ser.rts = False
                 time.sleep(0.5)
                 ser.reset_input_buffer()
-                
+
                 print(f'[serial] Conectado com sucesso em {p}')
                 sensor_conectado_real = True
                 break
@@ -158,7 +136,6 @@ def ler_serial():
                 if not linha:
                     continue
 
-                # Extrai os dados no formato: Tensao: 223.78 V | Corrente: 0.60584 A | Potencia: 135.57 W
                 m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
@@ -184,21 +161,6 @@ def ler_serial():
         time.sleep(2)
 
 
-def modo_demonstracao():
-    global simulando_pico_feira
-    while True:
-        tensao = round(227.0 + random.uniform(-2.5, 2.5), 1)
-        
-        if simulando_pico_feira:
-            corrente = round(6.6 + random.uniform(-0.3, 0.3), 2)
-        else:
-            corrente = round(0.80 + random.uniform(-0.05, 0.05), 2)
-
-        potencia = round(tensao * corrente, 2)
-        salvar_leitura(tensao, corrente, potencia)
-        time.sleep(3)
-
-
 # =====================================================
 # ROTAS DE AUTENTICAÇÃO E CONFIGURAÇÃO
 # =====================================================
@@ -207,18 +169,13 @@ def api_cadastrar():
     dados = request.get_json() or {}
     email = dados.get('email', '').strip().lower()
     senha = dados.get('senha', '').strip()
-    cep = dados.get('cep', '').replace('-', '').strip()
+    cep = re.sub(r'\D', '', dados.get('cep', ''))
 
     if not email or not senha or len(cep) != 8:
         return jsonify({'erro': 'Preencha todos os campos corretamente.'}), 400
 
-    tarifa = TARIFA_PADRAO
-    try:
-        r = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=4).json()
-        if 'uf' in r:
-            tarifa = TARIFAS_ESTADO.get(r['uf'], TARIFA_PADRAO)
-    except Exception:
-        pass
+    prefixo = int(cep[:2])
+    tarifa = 0.89 if (30 <= prefixo <= 39) else 0.83 if (1 <= prefixo <= 19) else 1.05 if (20 <= prefixo <= 28) else TARIFA_PADRAO
 
     senha_hash = generate_password_hash(senha)
 
@@ -267,7 +224,7 @@ def api_atualizar_usuario():
     user_id = dados.get('id')
     novo_email = dados.get('email', '').strip().lower()
     nova_senha = dados.get('senha', '').strip()
-    novo_cep = dados.get('cep', '').replace('-', '').strip()
+    novo_cep = re.sub(r'\D', '', dados.get('cep', ''))
     nova_tarifa = dados.get('tarifa')
     novo_limite = dados.get('limite_watts')
 
@@ -280,21 +237,7 @@ def api_atualizar_usuario():
         conn.close()
         return jsonify({'erro': 'Usuário não encontrado.'}), 404
 
-    # Atualiza tarifa se informada ou se o CEP foi modificado
-    tarifa_final = usuario['tarifa']
-    if nova_tarifa is not None:
-        try:
-            tarifa_final = float(nova_tarifa)
-        except ValueError:
-            pass
-    elif novo_cep and novo_cep != usuario['cep']:
-        try:
-            r = requests.get(f'https://viacep.com.br/ws/{novo_cep}/json/', timeout=4).json()
-            if 'uf' in r:
-                tarifa_final = TARIFAS_ESTADO.get(r['uf'], TARIFA_PADRAO)
-        except Exception:
-            pass
-
+    tarifa_final = float(nova_tarifa) if nova_tarifa is not None else usuario['tarifa']
     limite_final = float(novo_limite) if novo_limite else usuario['limite_watts']
     senha_final = generate_password_hash(nova_senha) if nova_senha else usuario['senha']
     cep_final = novo_cep if len(novo_cep) == 8 else usuario['cep']
@@ -338,15 +281,19 @@ def api_excluir_usuario():
 
 @app.route('/api/leituras/limpar', methods=['POST'])
 def api_limpar_leituras():
+    global kwh_acumulado_total, ultimo_tempo_leitura
+    kwh_acumulado_total = 0.0
+    ultimo_tempo_leitura = None
+
     conn = get_db()
     conn.execute('DELETE FROM leituras')
     conn.commit()
     conn.close()
-    return jsonify({'sucesso': True, 'mensagem': 'Histórico de leituras zerado.'})
+    return jsonify({'sucesso': True, 'mensagem': 'Histórico e consumo zerados com sucesso!'})
 
 
 # =====================================================
-# ROTAS DE LEITURAS E PAINEL
+# ROTAS DE DADOS, PAINEL E TARIFAS
 # =====================================================
 @app.route('/api/tarifa-cep', methods=['GET'])
 def obter_tarifa_por_cep():
@@ -355,7 +302,6 @@ def obter_tarifa_por_cep():
     if len(cep) != 8:
         return jsonify({'erro': 'CEP inválido'}), 400
 
-    # 1. Regra direta por faixas oficiais dos Correios (funciona offline ou online)
     prefixo2 = int(cep[:2])
     if 30 <= prefixo2 <= 39:
         uf_regra = 'MG'
@@ -364,7 +310,7 @@ def obter_tarifa_por_cep():
     elif 1 <= prefixo2 <= 19:
         uf_regra = 'SP'
         empresa = 'CPFL / Enel SP'
-        tarifa = 0.85
+        tarifa = 0.83
     elif 20 <= prefixo2 <= 28:
         uf_regra = 'RJ'
         empresa = 'Light / Enel RJ'
@@ -387,11 +333,10 @@ def obter_tarifa_por_cep():
         tarifa = 0.94
     else:
         uf_regra = 'BR'
-        empresa = 'Concessionária Padrão'
-        tarifa = TARIFA_PADRAO
+        empresa = 'Concessionária Nacional'
+        tarifa = 0.85
 
     cidade = 'Região ' + uf_regra
-    # Tenta obter nome exato da cidade via ViaCEP sem travar se falhar
     try:
         r = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=2).json()
         if 'localidade' in r and r['localidade']:
@@ -418,17 +363,24 @@ def api_leituras():
     dados = [dict(l) for l in reversed(linhas)]
     return jsonify(dados)
 
-# Rota para ligar/desligar o pico de 1500W na feira
+
 @app.route('/api/simular-pico', methods=['POST'])
 def api_simular_pico():
     global simulando_pico_feira
     dados = request.get_json() or {}
     simulando_pico_feira = dados.get('ativar', not simulando_pico_feira)
+
+    if simulando_pico_feira:
+        salvar_leitura(220.0, 6.82, 1500.0)
+    else:
+        salvar_leitura(220.0, 0.75, 165.0)
+
     return jsonify({
         'sucesso': True,
         'simulando_pico': simulando_pico_feira,
-        'mensagem': 'Pico de carga ativado (1500W)' if simulando_pico_feira else 'Carga normal restabelecida'
+        'mensagem': 'Pico de carga ativado (1500W - 6.8A)!' if simulando_pico_feira else 'Carga restabelecida para nível normal.'
     })
+
 
 @app.route('/api/stats')
 def api_stats():
@@ -450,8 +402,7 @@ def api_stats():
             'kwh_hoje': round(kwh_acumulado_total, 4),
             'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
             'limite_alerta': limite_alerta_watts,
-            'sensor_conectado': sensor_conectado_real,
-            'simulando_pico': simulando_pico_feira
+            'sensor_conectado': sensor_conectado_real
         })
 
     potencias = [l['potencia'] for l in linhas]
@@ -472,6 +423,7 @@ def api_stats():
         'sensor_conectado': sensor_conectado_real,
         'simulando_pico': simulando_pico_feira
     })
+
 
 @app.route('/api/historico-semanal')
 def api_historico_semanal():
@@ -500,6 +452,7 @@ def api_historico_semanal():
     })
     return jsonify(historico)
 
+
 @app.route('/')
 def home():
     return send_from_directory('static', 'index.html')
@@ -507,7 +460,6 @@ def home():
 
 if __name__ == '__main__':
     init_db()
-    # Recupera o consumo prévio salvo no SQLite para não zerar se reiniciar
     try:
         conn = get_db()
         row = conn.execute('SELECT COUNT(*), AVG(potencia) FROM leituras').fetchone()
