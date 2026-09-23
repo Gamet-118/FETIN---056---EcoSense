@@ -133,7 +133,6 @@
   .stat-label{ font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--white-7); font-weight:600; }
   .stat-value{ font-family:var(--font-display); font-weight:700; font-size:22px; color:var(--cream-2); margin-top:6px; }
 
-  /* Hero dinâmico (Normal e Alerta Vermelho) */
   .hero{ display:grid; grid-template-columns:1.3fr 1fr; gap:20px; margin-bottom:20px; }
   @media (max-width: 800px){ .hero{ grid-template-columns:1fr; } }
   .hero-main{
@@ -159,7 +158,6 @@
   .bars{ display:flex; align-items:flex-end; gap:5px; height:110px; }
   .bar-col{ flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:4px; height:100%; }
   .bar{ width:100%; background:var(--cream-2); opacity:.75; border-radius:3px 3px 0 0; min-height:2px; }
-  .bar-col.peak .bar{ opacity:1; background:var(--ok-2); }
   .bar-label{ font-size:9px; color:var(--white-7); }
 
   .tabs{ display:flex; flex-wrap:wrap; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:6px; margin-bottom:20px; }
@@ -194,7 +192,6 @@
   section.block h2{ font-family:var(--font-display); font-size:19px; margin-bottom:14px; color:var(--cream-2); }
 
   .support-card{ max-width:600px; margin:0 auto; background:var(--green-mid); border-radius:24px; padding:32px; }
-  .support-card label{ font-size:12px; text-transform:uppercase; font-weight:700; color:var(--cream-2); letter-spacing:.4px; }
   .support-confirm{ max-width:600px; margin:16px auto 0; background:rgba(255,255,255,.05); border-radius:16px; padding:16px; font-size:13px; color:#D3E2B6; display:none; }
 
   footer{ border-top:1px solid var(--line); padding:24px; text-align:center; color:var(--tan); font-size:12px; }
@@ -240,7 +237,6 @@
   <div id="screen-app" class="screen">
     <nav class="navbar" id="navbar">
       <div class="navbar-inner">
-        <!-- Logo clicável que volta para o início -->
         <div class="brand" onclick="goToView('dashboard')" style="cursor: pointer;" title="Voltar ao início">
           <span class="dot">🌿</span>EcoSense
         </div>
@@ -253,7 +249,6 @@
           <button class="nav-link" data-view="support" onclick="goToView('support')">Suporte</button>
         </div>
 
-        <!-- Engrenagem à esquerda do status do sensor -->
         <div style="display: flex; align-items: center; gap: 10px;">
           <button class="nav-link" data-view="settings" onclick="goToView('settings')" title="Configurações" style="padding: 6px 10px; font-size: 19px; line-height: 1;">
             ⚙️
@@ -276,7 +271,6 @@
           <p>Consumo medido agora pelo seu sensor EcoSense.</p>
         </div>
 
-        <!-- Seletor clicável de visualização -->
         <div style="display: flex; gap: 8px; margin-bottom: 14px;">
           <button type="button" class="btn-secondary active" id="btn-show-potencia" onclick="trocarModoHero('potencia')" style="padding: 8px 16px;">⚡ Potência (W)</button>
           <button type="button" class="btn-secondary" id="btn-show-tensao" onclick="trocarModoHero('tensao')" style="padding: 8px 16px;">🔌 Tensão (V)</button>
@@ -284,7 +278,6 @@
         </div>
 
         <div class="hero">
-          <!-- Card interativo com clique para alternar métricas -->
           <div class="hero-main" id="hero-card" onclick="alternarModoHero()" style="cursor: pointer;" title="Clique para alternar entre Potência, Tensão e Corrente">
             <span class="live-badge"><span class="pulse-dot"></span>AO VIVO · <span id="hero-modo-tag">POTÊNCIA</span> (toque para alternar)</span>
             <div class="hero-num" id="dash-power">-- W</div>
@@ -294,9 +287,9 @@
           <div class="hero-side">
             <div class="card"><div class="stat-label">Consumo hoje</div><div class="stat-value" id="dash-kwh">-- kWh</div></div>
             <div class="card">
-            <div class="stat-label">Custo estimado</div>
-            <div class="stat-value" id="dash-cost">R$ --</div>
-            <div style="font-size: 11px; color: var(--white-7); margin-top: 4px;" id="dash-concessionaria-info">Tarifa regional: carregando...</div>
+              <div class="stat-label">Custo estimado</div>
+              <div class="stat-value" id="dash-cost">R$ --</div>
+              <div style="font-size: 11px; color: var(--white-7); margin-top: 4px;" id="dash-concessionaria-info">Tarifa regional: carregando...</div>
             </div>
           </div>
         </div>
@@ -312,13 +305,11 @@
             <span style="font-size:12px; color:var(--white-7);">Clique nas colunas para ver detalhes</span>
           </div>
           <div style="display:flex; gap:12px; align-items:stretch;">
-            <!-- Eixo lateral de valores -->
             <div style="display:flex; flex-direction:column; justify-content:space-between; font-size:10px; color:var(--white-7); padding-bottom:18px; text-align:right; min-width:38px;">
               <span id="dash-scale-max">-- W</span>
               <span id="dash-scale-mid">-- W</span>
               <span>0 W</span>
             </div>
-            <!-- Área do Gráfico de Barras -->
             <div class="bars" id="dash-bars" style="flex:1; height:120px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding-left:6px;"></div>
           </div>
         </div>
@@ -420,7 +411,6 @@
         <div class="page-head"><h1>Configurações do Usuário</h1><p>Gerencie sua localização, tarifas e segurança da conta.</p></div>
 
         <div class="grid grid-2col" style="margin-bottom: 24px;">
-          <!-- Card de Localização e Tarifa -->
           <div class="card">
             <b style="font-size: 16px; display: block; margin-bottom: 16px;">📍 Localização & Tarifa de Energia</b>
             <div class="field">
@@ -441,7 +431,6 @@
             <button class="btn-primary" id="btn-salvar-tarifa" type="button" style="height: 44px; margin-top: 8px;">Salvar Preferências</button>
           </div>
 
-          <!-- Card de Dados de Acesso -->
           <div class="card">
             <b style="font-size: 16px; display: block; margin-bottom: 16px;">👤 Dados de Login</b>
             <div class="field">
@@ -456,7 +445,6 @@
           </div>
         </div>
 
-        <!-- Zona de Ações / Feira -->
         <div class="card" style="border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.05);">
           <b style="font-size: 16px; color: #FCA5A5; display: block; margin-bottom: 12px;">⚙️ Gerenciamento e Demonstração</b>
           <p style="font-size: 13px; color: var(--white-7); margin-bottom: 18px;">
@@ -496,7 +484,6 @@ let cacheLeituras = [];
 let cacheStats = null;
 let modoCadastro = false;
 
-// Recupera a sessão salva no navegador para não perder o ID se der F5
 let usuarioLogado = JSON.parse(localStorage.getItem('ecosense_user')) || {
   id: null,
   email: '',
@@ -528,7 +515,6 @@ function goToView(nome){
 
 document.addEventListener('DOMContentLoaded', () => {
 
-  // 1. Olho da senha
   const toggleSenhaEl = document.getElementById('toggle-senha');
   if (toggleSenhaEl) {
     toggleSenhaEl.addEventListener('click', function() {
@@ -544,7 +530,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 2. Alternar Login / Cadastro
   const authToggleBtn = document.getElementById('auth-toggle-btn');
   if (authToggleBtn) {
     authToggleBtn.addEventListener('click', () => {
@@ -562,7 +547,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 3. Submissão de Formulário (Login / Cadastro)
   const formAuth = document.getElementById('form-auth');
   if (formAuth) {
     formAuth.addEventListener('submit', async (e) => {
@@ -600,10 +584,8 @@ document.addEventListener('DOMContentLoaded', () => {
             limite_watts: data.limite_watts || 500.0
           };
 
-          // Salva no navegador para nunca mais ficar com id null
           localStorage.setItem('ecosense_user', JSON.stringify(usuarioLogado));
 
-          // Preenche os campos da aba de configurações
           if (document.getElementById('cfg-email')) document.getElementById('cfg-email').value = usuarioLogado.email;
           if (document.getElementById('cfg-cep')) document.getElementById('cfg-cep').value = usuarioLogado.cep;
           if (document.getElementById('cfg-tarifa')) document.getElementById('cfg-tarifa').value = usuarioLogado.tarifa;
@@ -620,7 +602,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-// 4. Buscar e Atualizar Tarifa pelo CEP na aba Configurações
   const btnRecalc = document.getElementById('btn-recalc-cep');
   if (btnRecalc) {
     btnRecalc.addEventListener('click', async () => {
@@ -637,15 +618,11 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        // Atualiza campos visuais da aba Configurações
         document.getElementById('cfg-tarifa').value = d.tarifa_kwh;
-
-        // Atualiza a sessão local
         usuarioLogado.tarifa = d.tarifa_kwh;
         usuarioLogado.cep = cep;
         localStorage.setItem('ecosense_user', JSON.stringify(usuarioLogado));
 
-        // Salva direto no banco de dados do usuário se estiver logado
         if (usuarioLogado.id) {
           await fetch('/api/usuario/atualizar', {
             method: 'POST',
@@ -667,15 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-        alert(`Localizado: ${d.cidade}/${d.uf} (${d.empresa})\nTarifa aplicada com sucesso: R$ ${d.tarifa_kwh.toFixed(2)}/kWh`);
-        renderDashboard();
-      } catch (e) {
-        alert('Erro ao buscar o CEP.');
-      }
-    });
-  }
 
-  // 5. Salvar Preferências de Tarifa / Limite
   const btnSalvarTarifa = document.getElementById('btn-salvar-tarifa');
   if (btnSalvarTarifa) {
     btnSalvarTarifa.addEventListener('click', async () => {
@@ -690,7 +659,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 6. Salvar Dados de Acesso (E-mail / Senha)
   const btnSalvarAcesso = document.getElementById('btn-salvar-acesso');
   if (btnSalvarAcesso) {
     btnSalvarAcesso.addEventListener('click', async () => {
@@ -704,7 +672,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7. Zerar Leituras
   const btnLimpar = document.getElementById('btn-limpar-leituras');
   if (btnLimpar) {
     btnLimpar.addEventListener('click', async () => {
@@ -734,7 +701,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 8. Logout
   const btnLogout = document.getElementById('btn-logout');
   if (btnLogout) {
     btnLogout.addEventListener('click', () => {
@@ -744,7 +710,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 9. Excluir Conta
   const btnExcluir = document.getElementById('btn-excluir-conta');
   if (btnExcluir) {
     btnExcluir.addEventListener('click', async () => {
@@ -765,7 +730,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 10. Botão da Feira: Simular Pico de 1500W
   const btnPico = document.getElementById('btn-simular-pico');
   if (btnPico) {
     btnPico.addEventListener('click', async () => {
@@ -783,7 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  // Suporte
+
   const formSupport = document.getElementById('form-support');
   if (formSupport) {
     formSupport.addEventListener('submit', function(e){
@@ -845,7 +809,7 @@ function minimo(l){ return l.length ? Math.min(...l) : 0; }
 function fmtW(v){ return (v || 0).toFixed(2)+' W'; }
 function fmtA(v){ return (v || 0).toFixed(2)+' A'; }
 
-let modoHero = 'potencia'; // 'potencia', 'tensao' ou 'corrente'
+let modoHero = 'potencia';
 
 function trocarModoHero(novoModo) {
   modoHero = novoModo;
@@ -869,6 +833,7 @@ function alternarModoHero() {
   else if (modoHero === 'tensao') trocarModoHero('corrente');
   else trocarModoHero('potencia');
 }
+
 function renderDashboard(){
   if (!cacheStats) return;
   const p = document.getElementById('dash-power');
@@ -887,7 +852,6 @@ function renderDashboard(){
   const correnteAtual = cacheStats.ultima_corrente || 0.80;
   const limiteWatts = cacheStats.limite_alerta || usuarioLogado.limite_watts || 500.0;
 
-  // Atualiza o valor principal conforme a aba selecionada
   const heroTag = document.getElementById('hero-modo-tag');
   if (p) {
     if (modoHero === 'potencia') {
@@ -902,40 +866,36 @@ function renderDashboard(){
     }
   }
 
-  // Linha de detalhe secundária com todos os valores explícitos
   if (c) {
     c.innerHTML = `⚡ ${fmtW(potenciaAtual)} · 🔌 ${tensaoAtual.toFixed(1)} V · 🔋 ${fmtA(correnteAtual)}`;
   }
-  if (k) k.textContent = (cacheStats.kwh_hoje || 0).toFixed(2) + ' kWh';
+  if (k) k.textContent = (cacheStats.kwh_hoje || 0).toFixed(4) + ' kWh';
   if (cost) cost.textContent = 'R$ ' + (cacheStats.custo_hoje || 0).toFixed(2).replace('.', ',');
   if (avg) avg.textContent = fmtW(cacheStats.media);
   if (maxEl) maxEl.textContent = fmtW(cacheStats.maximo);
 
-  // Exibe informações da concessionária e tarifa no painel
   const concInfo = document.getElementById('dash-concessionaria-info');
   if (concInfo) {
     concInfo.textContent = `Tarifa: R$ ${(usuarioLogado.tarifa || 0.85).toFixed(2)}/kWh (${usuarioLogado.cep ? 'CEP ' + usuarioLogado.cep : 'Padrão'})`;
   }
 
-  // Atualiza status dinâmico do sensor (físico vs simulação)
   const sensorText = document.getElementById('status-sensor-text');
   const sensorDot = document.getElementById('status-sensor-dot');
   if (sensorText && sensorDot) {
     if (cacheStats.sensor_conectado) {
       sensorText.textContent = "Sensor conectado";
-      sensorDot.style.background = "var(--ok)"; // Verde
+      sensorDot.style.background = "var(--ok)";
     } else {
       sensorText.textContent = "Modo Simulação (Sem ESP32)";
-      sensorDot.style.background = "#9CA3AF"; // Cinza
+      sensorDot.style.background = "#9CA3AF";
     }
   }
 
-  // Alerta Visual de Consumo Alto
   if (potenciaAtual > limiteWatts) {
     if (heroCard) heroCard.classList.add('alerta-ativo');
     if (alertBanner) alertBanner.style.display = 'block';
     if (alertVal) alertVal.textContent = limiteWatts;
-    if (tip) tip.textContent = '⚠️ ALTO CONSUMO: Potência acima do seu limite configurado! Verifique aquecedores, ferros ou chuveiros.';
+    if (tip) tip.textContent = '⚠️ ALTO CONSUMO: Potência acima do seu limite configurado! Verifique a carga.';
   } else {
     if (heroCard) heroCard.classList.remove('alerta-ativo');
     if (alertBanner) alertBanner.style.display = 'none';
@@ -970,6 +930,7 @@ function renderDashboard(){
     }).join('');
   }
 }
+
 function setReportTab(tipo){
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   const b = document.querySelector(`.tab[data-rep="${tipo}"]`);
@@ -1000,7 +961,8 @@ async function renderReportChart(tipo) {
       datas = ultimas.map(l => (l.timestamp ? l.timestamp.substring(11, 19) : '--:--:--'));
       custos = valores.map(v => 'R$ ' + ((v / 1000) * (usuarioLogado.tarifa || 0.85)).toFixed(3));
       explicacao = 'Variação instantânea registrada pelas medições dos sensores na bancada.';
-    } else {
+    }
+  } else {
     titleEl.textContent = 'Consumo Semanal Consolidado (kWh)';
     try {
       const res = await fetch('/api/historico-semanal');
