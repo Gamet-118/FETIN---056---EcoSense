@@ -24,15 +24,15 @@ sensor_conectado_real = False
 simulando_pico_feira = False
 
 TARIFA_PADRAO = 0.85
-
-TARIFA_PADRAO = 0.85
-tarifa_global_kwh = TARIFA_PADRAO
-limite_alerta_watts = 500.0  # Limite padrão para disparo de alerta de alto consumo
-
-TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
 limite_alerta_watts = 500.0
 
+# --- ADICIONADO: Variáveis para acumular energia real ---
+kwh_acumulado_total = 0.0
+ultimo_tempo_leitura = None
+# --------------------------------------------------------
+
+DISTRIBUIDORAS_CIDADES = {
 DISTRIBUIDORAS_CIDADES = {
     'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
     'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
@@ -87,10 +87,22 @@ def init_db():
 
 
 def salvar_leitura(tensao, corrente, potencia):
+    global kwh_acumulado_total, ultimo_tempo_leitura
+    agora = datetime.now()
+    
+    # Integração de energia em tempo real: Energia (kWh) = Potência (kW) * Tempo (horas)
+    if ultimo_tempo_leitura is not None:
+        delta_segundos = (agora - ultimo_tempo_leitura).total_seconds()
+        # Limita o delta para evitar saltos se a leitura pausar por muito tempo
+        if 0 < delta_segundos < 10:
+            kwh_incremento = (potencia / 1000.0) * (delta_segundos / 3600.0)
+            kwh_acumulado_total += kwh_incremento
+    ultimo_tempo_leitura = agora
+
     conn = get_db()
     conn.execute(
         'INSERT INTO leituras (tensao, corrente, potencia, timestamp) VALUES (?, ?, ?, ?)',
-        (tensao, corrente, potencia, datetime.now().isoformat())
+        (tensao, corrente, potencia, agora.isoformat())
     )
     conn.commit()
     conn.close()
@@ -103,14 +115,26 @@ def ler_serial():
     while True:
         if serial is None:
             sensor_conectado_real = False
-            modo_demonstracao()
             time.sleep(2)
             continue
 
         ser = None
         for p in portas:
             try:
-                ser = serial.Serial(p, BAUD_RATE, timeout=2)
+                # Configura a porta serie desativando o controlo por hardware
+                ser = serial.Serial(
+                    p, 
+                    BAUD_RATE, 
+                    timeout=2, 
+                    dsrdtr=False, 
+                    rtscts=False
+                )
+                # Impede que a ESP32 seja forcada a entrar em modo de reset/bootloader
+                ser.dtr = False
+                ser.rts = False
+                time.sleep(0.5)
+                ser.reset_input_buffer()
+                
                 print(f'[serial] Conectado com sucesso em {p}')
                 sensor_conectado_real = True
                 break
@@ -128,8 +152,7 @@ def ler_serial():
                 if not linha:
                     continue
 
-                # Extrai os três valores com precisão a partir das etiquetas da string
-                # Exemplo: Tensao: 231.60 V | Corrente: 0.74134 A | Potencia: 171.69 W
+                # Extrai os dados no formato: Tensao: 223.78 V | Corrente: 0.60584 A | Potencia: 135.57 W
                 m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
@@ -140,10 +163,11 @@ def ler_serial():
                     potencia = float(m_potencia.group(1))
 
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.3f} A | {potencia:.2f} W')
+                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.4f} A | {potencia:.2f} W')
                     continue
+
             except Exception as err:
-                print(f'[serial] Perda de comunicação na porta: {err}')
+                print(f'[serial] Perda de comunicacao: {err}')
                 sensor_conectado_real = False
                 break
 
@@ -381,48 +405,45 @@ def api_simular_pico():
 
 @app.route('/api/stats')
 def api_stats():
+    global kwh_acumulado_total
     conn = get_db()
     linhas = conn.execute(
-        'SELECT corrente, potencia FROM leituras ORDER BY id DESC LIMIT 200'
+        'SELECT tensao, corrente, potencia FROM leituras ORDER BY id DESC LIMIT 60'
     ).fetchall()
     conn.close()
 
     if not linhas:
         return jsonify({
             'ultima_potencia': 0.0,
+            'ultima_tensao': 0.0,
             'ultima_corrente': 0.0,
             'media': 0.0,
             'maximo': 0.0,
             'minimo': 0.0,
-            'kwh_hoje': 0.0,
-            'custo_hoje': 0.0,
-            'limite_alerta': limite_alerta_watts
+            'kwh_hoje': round(kwh_acumulado_total, 4),
+            'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
+            'limite_alerta': limite_alerta_watts,
+            'sensor_conectado': sensor_conectado_real
         })
 
     potencias = [l['potencia'] for l in linhas]
+    potencias_ativas = [p for p in potencias if p > 5.0]
+    media_val = sum(potencias_ativas) / len(potencias_ativas) if potencias_ativas else 0.0
     ultima = linhas[0]
 
-    media = sum(potencias) / len(potencias)
-    HORAS_USO_ESTIMADAS = 8
-    
-    kwh_hoje = (media * HORAS_USO_ESTIMADAS) / 1000
-    custo_hoje = kwh_hoje * tarifa_global_kwh
-
-    tensao_val = round(ultima['tensao'], 1) if 'tensao' in ultima.keys() and ultima['tensao'] else 227.0
     return jsonify({
         'ultima_potencia': round(ultima['potencia'], 2),
-        'ultima_tensao': tensao_val,
-        'ultima_corrente': round(ultima['corrente'], 2),
-        'media': round(media, 2),
+        'ultima_tensao': round(ultima['tensao'], 1),
+        'ultima_corrente': round(ultima['corrente'], 3),
+        'media': round(media_val, 2),
         'maximo': round(max(potencias), 2),
         'minimo': round(min(potencias), 2),
-        'kwh_hoje': round(kwh_hoje, 3),
-        'custo_hoje': round(custo_hoje, 2),
+        'kwh_hoje': round(kwh_acumulado_total, 4),
+        'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
         'limite_alerta': limite_alerta_watts,
         'sensor_conectado': sensor_conectado_real,
         'simulando_pico': simulando_pico_feira
     })
-
 
 @app.route('/')
 def home():
