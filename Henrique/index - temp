@@ -903,16 +903,29 @@ function renderDashboard(){
   }
 
   const el = document.getElementById('dash-bars');
-  const ultimas = cacheLeituras.slice(-24);
+  const ultimas = cacheLeituras.slice(-20);
+  const scaleMax = document.getElementById('dash-scale-max');
+  const scaleMid = document.getElementById('dash-scale-mid');
+
   if (el && ultimas.length){
-    const max = maximo(ultimas.map(l => l.potencia)) || 1;
-    el.innerHTML = ultimas.map(l => {
-      const h = Math.round((l.potencia / max) * 100);
-      return `<div class="bar-col"><div class="bar" style="height:${h}%"></div></div>`;
+    const potencias = ultimas.map(l => l.potencia);
+    const maxVal = Math.max(...potencias, 10);
+
+    if (scaleMax) scaleMax.textContent = maxVal.toFixed(0) + ' W';
+    if (scaleMid) scaleMid.textContent = (maxVal / 2).toFixed(0) + ' W';
+
+    el.innerHTML = ultimas.map((l, i) => {
+      const h = Math.max(6, Math.round((l.potencia / maxVal) * 100));
+      const hora = l.timestamp ? l.timestamp.substring(11, 19) : `#${i + 1}`;
+      return `
+        <div class="bar-col" style="cursor:pointer;" 
+             onclick="alert('📊 Leitura ${i + 1}\\nHora: ${hora}\\nPotência: ${l.potencia.toFixed(1)} W\\nCorrente: ${l.corrente.toFixed(3)} A')" 
+             title="Clique para detalhes: ${l.potencia.toFixed(1)} W">
+          <div class="bar" style="height:${h}%; background: var(--ok-2); border-radius: 3px 3px 0 0;"></div>
+        </div>`;
     }).join('');
   }
 }
-
 function setReportTab(tipo){
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   const b = document.querySelector(`.tab[data-rep="${tipo}"]`);
