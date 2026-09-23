@@ -710,10 +710,22 @@ document.addEventListener('DOMContentLoaded', () => {
     btnLimpar.addEventListener('click', async () => {
       if (!confirm('Deseja realmente zerar todo o histórico de medições?')) return;
       try {
-        const r = await fetch('/api/leituras/limpar', { method: 'POST' });
+        const r = await fetch('/api/leituras/limpar', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
         if (r.ok) {
-          alert('Histórico de medições zerado com sucesso!');
           cacheLeituras = [];
+          if (cacheStats) {
+            cacheStats.kwh_hoje = 0.0;
+            cacheStats.custo_hoje = 0.0;
+            cacheStats.media = 0.0;
+            cacheStats.maximo = 0.0;
+            cacheStats.minimo = 0.0;
+            cacheStats.ultima_potencia = 0.0;
+            cacheStats.ultima_corrente = 0.0;
+          }
+          alert('Histórico de medições e consumo acumulado zerados com sucesso!');
           atualizarTudo();
         }
       } catch (e) {
@@ -752,15 +764,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-    // 10. Botão da Feira: Simular Pico de 1500W
+
+  // 10. Botão da Feira: Simular Pico de 1500W
   const btnPico = document.getElementById('btn-simular-pico');
   if (btnPico) {
     btnPico.addEventListener('click', async () => {
       try {
-        const r = await fetch('/api/simular-pico', { method: 'POST' });
+        const r = await fetch('/api/simular-pico', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
         const d = await r.json();
         btnPico.textContent = d.simulando_pico ? '🟢 Desativar Simulação (Voltar ao Normal)' : '⚡ Simular Carga Alta (1500W)';
         alert(d.mensagem);
+        atualizarTudo();
       } catch (e) {
         alert('Erro ao acionar simulação de pico.');
       }
