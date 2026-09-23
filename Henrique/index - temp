@@ -591,11 +591,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. Buscar e Atualizar Tarifa pelo CEP na aba Configurações
+// 4. Buscar e Atualizar Tarifa pelo CEP na aba Configurações
   const btnRecalc = document.getElementById('btn-recalc-cep');
   if (btnRecalc) {
     btnRecalc.addEventListener('click', async () => {
-      const cep = document.getElementById('cfg-cep').value.replace('-', '').trim();
+      const cep = document.getElementById('cfg-cep').value.replace(/\D/g, '').trim();
       if (cep.length !== 8) {
         alert('Digite um CEP válido com 8 dígitos.');
         return;
@@ -608,13 +608,16 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         document.getElementById('cfg-tarifa').value = d.tarifa_kwh;
-        alert(`Região: ${d.cidade}/${d.uf} | Tarifa sugerida: R$ ${d.tarifa_kwh}/kWh`);
+        usuarioLogado.tarifa = d.tarifa_kwh;
+        usuarioLogado.cep = cep;
+        localStorage.setItem('ecosense_user', JSON.stringify(usuarioLogado));
+        alert(`Região: ${d.cidade}/${d.uf} (${d.empresa})\nTarifa aplicada: R$ ${d.tarifa_kwh}/kWh`);
+        renderDashboard();
       } catch (e) {
-        alert('Erro ao consultar o ViaCEP.');
+        alert('Erro ao consultar o CEP.');
       }
     });
   }
-
   // 5. Salvar Preferências de Tarifa / Limite
   const btnSalvarTarifa = document.getElementById('btn-salvar-tarifa');
   if (btnSalvarTarifa) {
