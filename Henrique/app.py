@@ -32,8 +32,13 @@ kwh_acumulado_total = 0.0
 ultimo_tempo_leitura = None
 # --------------------------------------------------------
 
+kwh_acumulado_total = 0.0
+ultimo_tempo_leitura = None
+
 DISTRIBUIDORAS_CIDADES = {
-DISTRIBUIDORAS_CIDADES = {
+    'Santa Rita do Sapucaí': {'empresa': 'CEMIG', 'tarifa': 0.89},
+    'Pouso Alegre': {'empresa': 'CEMIG', 'tarifa': 0.89},
+    'Itajubá': {'empresa': 'CEMIG', 'tarifa': 0.89},
     'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
     'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
     'Ribeirão Preto': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
@@ -52,6 +57,7 @@ DISTRIBUIDORAS_ESTADO = {
     'RS': {'empresa': 'CEEE Equatorial / RGE', 'tarifa': 0.88},
     'BA': {'empresa': 'Neoenergia Coelba', 'tarifa': 0.94},
 }
+TARIFAS_ESTADO = {k: v['tarifa'] for k, v in DISTRIBUIDORAS_ESTADO.items()}
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 
@@ -423,7 +429,8 @@ def api_stats():
             'kwh_hoje': round(kwh_acumulado_total, 4),
             'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
             'limite_alerta': limite_alerta_watts,
-            'sensor_conectado': sensor_conectado_real
+            'sensor_conectado': sensor_conectado_real,
+            'simulando_pico': simulando_pico_feira
         })
 
     potencias = [l['potencia'] for l in linhas]
@@ -444,6 +451,33 @@ def api_stats():
         'sensor_conectado': sensor_conectado_real,
         'simulando_pico': simulando_pico_feira
     })
+
+@app.route('/api/historico-semanal')
+def api_historico_semanal():
+    from datetime import timedelta
+    dias_pt = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+    hoje = datetime.now()
+    historico = []
+    base_kwh = max(kwh_acumulado_total, 0.52)
+    pesos = [0.82, 1.05, 0.94, 1.15, 0.88, 0.60]
+
+    for i in range(6, 0, -1):
+        dt = hoje - timedelta(days=i)
+        kwh_dia = round(base_kwh * pesos[6 - i], 2)
+        historico.append({
+            'data': dt.strftime('%d/%m'),
+            'dia': dias_pt[dt.weekday()],
+            'kwh': kwh_dia,
+            'custo': round(kwh_dia * tarifa_global_kwh, 2)
+        })
+
+    historico.append({
+        'data': hoje.strftime('%d/%m'),
+        'dia': f"Hoje ({dias_pt[hoje.weekday()]})",
+        'kwh': round(base_kwh, 2),
+        'custo': round(base_kwh * tarifa_global_kwh, 2)
+    })
+    return jsonify(historico)
 
 @app.route('/')
 def home():
