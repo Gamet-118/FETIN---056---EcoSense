@@ -307,8 +307,20 @@
         </div>
 
         <div class="card">
-          <b style="font-size:14px;">Leituras recentes do sensor</b>
-          <div class="bars" id="dash-bars" style="margin-top:14px;"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <b style="font-size:14px;">⚡ Histórico Recente de Potência (Watts)</b>
+            <span style="font-size:12px; color:var(--white-7);">Clique nas colunas para ver detalhes</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:stretch;">
+            <!-- Eixo lateral de valores -->
+            <div style="display:flex; flex-direction:column; justify-content:space-between; font-size:10px; color:var(--white-7); padding-bottom:18px; text-align:right; min-width:38px;">
+              <span id="dash-scale-max">-- W</span>
+              <span id="dash-scale-mid">-- W</span>
+              <span>0 W</span>
+            </div>
+            <!-- Área do Gráfico de Barras -->
+            <div class="bars" id="dash-bars" style="flex:1; height:120px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); padding-left:6px;"></div>
+          </div>
         </div>
       </section>
 
