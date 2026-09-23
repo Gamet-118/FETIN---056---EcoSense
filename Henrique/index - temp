@@ -988,12 +988,19 @@ async function renderReportChart(tipo) {
   if (tipo === 'diario') {
     titleEl.textContent = 'Leituras em Tempo Real da Bancada (Watts)';
     const ultimas = cacheLeituras.slice(-14);
-    valores = ultimas.length ? ultimas.map(l => l.potencia) : [0];
-    labels = ultimas.map((_, i) => `${i + 1}ª`);
-    datas = ultimas.map(l => (l.timestamp ? l.timestamp.substring(11, 19) : '--:--:--'));
-    custos = valores.map(v => 'R$ ' + ((v / 1000) * (usuarioLogado.tarifa || 0.85)).toFixed(3));
-    explicacao = 'Variação instantânea registrada pelas medições dos sensores na bancada.';
-  } else {
+    if (ultimas.length === 0) {
+      valores = [0];
+      labels = ['Aguardando'];
+      datas = ['--:--:--'];
+      custos = ['R$ 0,00'];
+      explicacao = 'Nenhuma leitura registrada ainda. Ligue a bancada para iniciar a medição.';
+    } else {
+      valores = ultimas.map(l => l.potencia);
+      labels = ultimas.map((_, i) => `${i + 1}ª`);
+      datas = ultimas.map(l => (l.timestamp ? l.timestamp.substring(11, 19) : '--:--:--'));
+      custos = valores.map(v => 'R$ ' + ((v / 1000) * (usuarioLogado.tarifa || 0.85)).toFixed(3));
+      explicacao = 'Variação instantânea registrada pelas medições dos sensores na bancada.';
+    } else {
     titleEl.textContent = 'Consumo Semanal Consolidado (kWh)';
     try {
       const res = await fetch('/api/historico-semanal');
