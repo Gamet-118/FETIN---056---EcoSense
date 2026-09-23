@@ -667,6 +667,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+        alert(`Localizado: ${d.cidade}/${d.uf} (${d.empresa})\nTarifa aplicada com sucesso: R$ ${d.tarifa_kwh.toFixed(2)}/kWh`);
+        renderDashboard();
+      } catch (e) {
+        alert('Erro ao buscar o CEP.');
+      }
+    });
+  }
 
   // 5. Salvar Preferências de Tarifa / Limite
   const btnSalvarTarifa = document.getElementById('btn-salvar-tarifa');
