@@ -351,40 +351,61 @@ def api_limpar_leituras():
 @app.route('/api/tarifa-cep', methods=['GET'])
 def obter_tarifa_por_cep():
     global tarifa_global_kwh
-    cep = request.args.get('cep', '').replace('-', '').strip()
+    cep = re.sub(r'\D', '', request.args.get('cep', ''))
     if len(cep) != 8:
         return jsonify({'erro': 'CEP inválido'}), 400
 
+    # 1. Regra direta por faixas oficiais dos Correios (funciona offline ou online)
+    prefixo2 = int(cep[:2])
+    if 30 <= prefixo2 <= 39:
+        uf_regra = 'MG'
+        empresa = 'CEMIG'
+        tarifa = 0.89
+    elif 1 <= prefixo2 <= 19:
+        uf_regra = 'SP'
+        empresa = 'CPFL / Enel SP'
+        tarifa = 0.85
+    elif 20 <= prefixo2 <= 28:
+        uf_regra = 'RJ'
+        empresa = 'Light / Enel RJ'
+        tarifa = 1.05
+    elif 80 <= prefixo2 <= 87:
+        uf_regra = 'PR'
+        empresa = 'COPEL'
+        tarifa = 0.81
+    elif 88 <= prefixo2 <= 89:
+        uf_regra = 'SC'
+        empresa = 'CELESC'
+        tarifa = 0.73
+    elif 90 <= prefixo2 <= 99:
+        uf_regra = 'RS'
+        empresa = 'CEEE / RGE'
+        tarifa = 0.88
+    elif 40 <= prefixo2 <= 48:
+        uf_regra = 'BA'
+        empresa = 'Neoenergia Coelba'
+        tarifa = 0.94
+    else:
+        uf_regra = 'BR'
+        empresa = 'Concessionária Padrão'
+        tarifa = TARIFA_PADRAO
+
+    cidade = 'Região ' + uf_regra
+    # Tenta obter nome exato da cidade via ViaCEP sem travar se falhar
     try:
-        resp = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=4).json()
-        if 'erro' in resp:
-            return jsonify({'erro': 'CEP não encontrado'}), 404
+        r = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=2).json()
+        if 'localidade' in r and r['localidade']:
+            cidade = r['localidade']
+    except Exception:
+        pass
 
-        cidade = resp.get('localidade', '')
-        uf = resp.get('uf', 'SP')
-
-        if cidade in DISTRIBUIDORAS_CIDADES:
-            dados = DISTRIBUIDORAS_CIDADES[cidade]
-            empresa = dados['empresa']
-            tarifa = dados['tarifa']
-        elif uf in DISTRIBUIDORAS_ESTADO:
-            dados = DISTRIBUIDORAS_ESTADO[uf]
-            empresa = dados['empresa']
-            tarifa = dados['tarifa']
-        else:
-            empresa = 'Concessionária Padrão'
-            tarifa = TARIFA_PADRAO
-
-        tarifa_global_kwh = tarifa
-
-        return jsonify({
-            'cidade': cidade,
-            'uf': uf,
-            'empresa': empresa,
-            'tarifa_kwh': tarifa
-        })
-    except Exception as e:
-        return jsonify({'erro': str(e), 'tarifa_kwh': tarifa_global_kwh}), 500
+    tarifa_global_kwh = tarifa
+    return jsonify({
+        'cidade': cidade,
+        'uf': uf_regra,
+        'empresa': empresa,
+        'tarifa_kwh': tarifa
+    })
 
 
 @app.route('/api/leituras')
