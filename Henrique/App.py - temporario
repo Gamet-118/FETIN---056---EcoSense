@@ -134,23 +134,13 @@ def ler_serial():
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_potencia = re.search(r'Potencia:\s*([\d.]+)', linha, re.IGNORECASE)
 
-                if m_tensao and m_corrente:
-                    tensao_lida = float(m_tensao.group(1))
-
-                    if m_tensao and m_corrente:
-                    tensao_lida = float(m_tensao.group(1))
-
-                    if tensao_lida < 80.0:
-                        tensao = 0.0
-                        corrente = 0.0
-                        potencia = 0.0
-                    else:
-                        tensao = round(random.uniform(220.5, 225.8), 1)
-                        corrente = round(random.uniform(0.62, 0.88), 3)
-                        potencia = round(tensao * corrente, 2)
+                if m_tensao and m_corrente and m_potencia:
+                    tensao = float(m_tensao.group(1))
+                    corrente = float(m_corrente.group(1))
+                    potencia = float(m_potencia.group(1))
 
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
+                    print(f'[EcoSense Real] {tensao:.2f} V | {corrente:.3f} A | {potencia:.2f} W')
                     continue
             except Exception as err:
                 print(f'[serial] Perda de comunicação na porta: {err}')
