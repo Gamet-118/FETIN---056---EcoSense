@@ -87,10 +87,22 @@ def init_db():
 
 
 def salvar_leitura(tensao, corrente, potencia):
+    global kwh_acumulado_total, ultimo_tempo_leitura
+    agora = datetime.now()
+    
+    # Integração de energia em tempo real: Energia (kWh) = Potência (kW) * Tempo (horas)
+    if ultimo_tempo_leitura is not None:
+        delta_segundos = (agora - ultimo_tempo_leitura).total_seconds()
+        # Limita o delta para evitar saltos se a leitura pausar por muito tempo
+        if 0 < delta_segundos < 10:
+            kwh_incremento = (potencia / 1000.0) * (delta_segundos / 3600.0)
+            kwh_acumulado_total += kwh_incremento
+    ultimo_tempo_leitura = agora
+
     conn = get_db()
     conn.execute(
         'INSERT INTO leituras (tensao, corrente, potencia, timestamp) VALUES (?, ?, ?, ?)',
-        (tensao, corrente, potencia, datetime.now().isoformat())
+        (tensao, corrente, potencia, agora.isoformat())
     )
     conn.commit()
     conn.close()
