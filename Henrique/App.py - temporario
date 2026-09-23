@@ -24,15 +24,15 @@ sensor_conectado_real = False
 simulando_pico_feira = False
 
 TARIFA_PADRAO = 0.85
-
-TARIFA_PADRAO = 0.85
-tarifa_global_kwh = TARIFA_PADRAO
-limite_alerta_watts = 500.0  # Limite padrão para disparo de alerta de alto consumo
-
-TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
 limite_alerta_watts = 500.0
 
+# --- ADICIONADO: Variáveis para acumular energia real ---
+kwh_acumulado_total = 0.0
+ultimo_tempo_leitura = None
+# --------------------------------------------------------
+
+DISTRIBUIDORAS_CIDADES = {
 DISTRIBUIDORAS_CIDADES = {
     'São Paulo': {'empresa': 'Enel SP', 'tarifa': 0.83},
     'Campinas': {'empresa': 'CPFL Paulista', 'tarifa': 0.87},
