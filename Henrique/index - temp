@@ -848,8 +848,9 @@ function renderDashboard(){
   const alertVal = document.getElementById('alert-limite-val');
 
   const potenciaAtual = cacheStats.ultima_potencia || 0.0;
-  const tensaoAtual = cacheStats.ultima_tensao || 227.0;
-  const correnteAtual = cacheStats.ultima_corrente || 0.80;
+  // Se a potencia for zero, zera tensao e corrente na exibicao visual
+  const tensaoAtual = potenciaAtual > 0 ? (cacheStats.ultima_tensao || 0.0) : 0.0;
+  const correnteAtual = potenciaAtual > 0 ? (cacheStats.ultima_corrente || 0.0) : 0.0;
   const limiteWatts = cacheStats.limite_alerta || usuarioLogado.limite_watts || 500.0;
 
   const heroTag = document.getElementById('hero-modo-tag');
