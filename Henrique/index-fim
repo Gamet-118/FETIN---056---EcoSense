@@ -139,10 +139,16 @@
     .hamburger{ display:block; }
   }
 
-  main{ max-width:var(--maxw); margin:0 auto; padding:28px 24px 80px; width: 100%; }
-  .page-head{ margin-bottom:24px; }
-  .page-head h1{ font-family:var(--font-display); font-size:30px; font-weight:700; color:var(--cream); }
-  .page-head p{ color:var(--white-7); font-size:14px; margin-top:6px; }
+  main{ 
+    max-width: var(--maxw); 
+    margin: 0 auto; 
+    padding: 20px 24px 60px; 
+    width: 100%; 
+    min-height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
 
   .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
   .grid{ display:grid; gap:14px; }
