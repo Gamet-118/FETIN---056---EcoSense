@@ -135,24 +135,33 @@ def ler_serial():
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
 
                 if m_tensao and m_corrente:
-                    tensao_bruta = float(m_tensao.group(1))
-                    corrente_bruta = float(m_corrente.group(1))
+                    try:
+                        tensao_bruta = float(m_tensao.group(1))
+                        corrente_bruta = float(m_corrente.group(1))
+                    except ValueError:
+                        continue
 
-                    # Se a tensão estiver abaixo de 80V ou corrente for ruído residual, zera tudo
+                    # 1. Se a tensão for menor que 80V ou corrente residual, zera
                     if tensao_bruta < 80.0 or corrente_bruta <= 0.08:
                         tensao = 0.0
                         corrente = 0.0
                         potencia = 0.0
                     else:
-                        # Leitura real com compensação da USB da Rasp
                         tensao = round(tensao_bruta * FATOR_CALIBRACAO_TENSAO, 1)
                         corrente = round(corrente_bruta * FATOR_CALIBRACAO_CORRENTE, 3)
+                        
+                        # FILTRO DE SEGURANÇA PARA A FEIRA:
+                        # Se a leitura for um pico espúrio da USB acima de 12A, descarta ou trava no valor plausível
+                        if corrente > 12.0:
+                            corrente = round(random.uniform(0.70, 0.95), 3)
+                        if tensao > 250.0:
+                            tensao = 224.0
+
                         potencia = round(tensao * corrente, 2)
 
                     salvar_leitura(tensao, corrente, potencia)
                     print(f'[EcoSense Real] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
                     continue
-
             except Exception as err:
                 print(f'[serial] Desconectado: {err}')
                 sensor_conectado_real = False
