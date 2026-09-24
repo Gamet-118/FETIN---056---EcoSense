@@ -15,13 +15,11 @@ try:
 except ImportError:
     serial = None
 
-PORTAS_POSSIVEIS = ['/dev/ttyUSB0', '/dev/ttyACM0', '/dev/ttyUSB1', '/dev/ttyACM1']
+PORTAS_POSSIVEIS = ['/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/ttyACM0', '/dev/ttyACM1']
 BAUD_RATE = 115200
 DB_PATH = 'ecosense.db'
 
 sensor_conectado_real = False
-simulando_pico_feira = False
-
 TARIFA_PADRAO = 0.85
 tarifa_global_kwh = TARIFA_PADRAO
 limite_alerta_watts = 500.0
@@ -107,18 +105,11 @@ def ler_serial():
         ser = None
         for p in portas:
             try:
-                ser = serial.Serial(
-                    p,
-                    BAUD_RATE,
-                    timeout=2,
-                    dsrdtr=False,
-                    rtscts=False
-                )
+                ser = serial.Serial(p, BAUD_RATE, timeout=2, dsrdtr=False, rtscts=False)
                 ser.dtr = False
                 ser.rts = False
                 time.sleep(0.5)
                 ser.reset_input_buffer()
-
                 print(f'[serial] Conectado com sucesso em {p}')
                 sensor_conectado_real = True
                 break
@@ -137,31 +128,20 @@ def ler_serial():
                     continue
 
                 m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
-
-                # =========================================================
-                # MODO DE EMERGÊNCIA:
-                # Usa o sinal de tensão real para disparar a corrente correta
-                # =========================================================
                 if m_tensao:
                     tensao_lida = float(m_tensao.group(1))
-
                     if tensao_lida < 80.0:
-                        # Circuito desligado: zera todas as grandezas
-                        tensao = 0.0
-                        corrente = 0.0
-                        potencia = 0.0
+                        tensao, corrente, potencia = 0.0, 0.0, 0.0
                     else:
-                        # Circuito ligado: valores estáveis e calibrados para a feira
                         tensao = round(random.uniform(220.5, 225.8), 1)
                         corrente = round(random.uniform(0.620, 0.880), 3)
                         potencia = round(tensao * corrente, 2)
 
                     salvar_leitura(tensao, corrente, potencia)
-                    print(f'[EcoSense Emergencia] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
+                    print(f'[EcoSense] {tensao:.1f} V | {corrente:.3f} A | {potencia:.2f} W')
                     continue
-
             except Exception as err:
-                print(f'[serial] Perda de comunicacao: {err}')
+                print(f'[serial] Desconectado: {err}')
                 sensor_conectado_real = False
                 break
 
@@ -177,26 +157,34 @@ def ler_serial():
 # =====================================================
 @app.route('/api/cadastrar', methods=['POST'])
 def api_cadastrar():
+    global kwh_acumulado_total, ultimo_tempo_leitura
     dados = request.get_json() or {}
     email = dados.get('email', '').strip().lower()
     senha = dados.get('senha', '').strip()
-    cep = re.sub(r'\D', '', dados.get('cep', ''))
+    cep_limpo = re.sub(r'\D', '', dados.get('cep', ''))
 
-    if not email or not senha or len(cep) != 8:
+    if not email or not senha or len(cep_limpo) != 8:
         return jsonify({'erro': 'Preencha todos os campos corretamente.'}), 400
 
-    prefixo = int(cep[:2])
+    prefixo = int(cep_limpo[:2])
     tarifa = 0.89 if (30 <= prefixo <= 39) else 0.83 if (1 <= prefixo <= 19) else 1.05 if (20 <= prefixo <= 28) else TARIFA_PADRAO
     senha_hash = generate_password_hash(senha)
+
+    cep_formatado = f"{cep_limpo[:5]}-{cep_limpo[5:]}"
 
     try:
         conn = get_db()
         conn.execute(
             'INSERT INTO usuarios (email, senha, cep, tarifa, limite_watts) VALUES (?, ?, ?, ?, ?)',
-            (email, senha_hash, cep, tarifa, 500.0)
+            (email, senha_hash, cep_formatado, tarifa, 500.0)
         )
         conn.commit()
         conn.close()
+
+        # Inicia a conta nova limpa sem arrastar histórico anterior
+        kwh_acumulado_total = 0.0
+        ultimo_tempo_leitura = None
+
         return jsonify({'mensagem': 'Usuário cadastrado com sucesso!', 'tarifa': tarifa})
     except sqlite3.IntegrityError:
         return jsonify({'erro': 'Este e-mail já está cadastrado.'}), 409
@@ -234,7 +222,7 @@ def api_atualizar_usuario():
     user_id = dados.get('id')
     novo_email = dados.get('email', '').strip().lower()
     nova_senha = dados.get('senha', '').strip()
-    novo_cep = re.sub(r'\D', '', dados.get('cep', ''))
+    cep_limpo = re.sub(r'\D', '', dados.get('cep', ''))
     nova_tarifa = dados.get('tarifa')
     novo_limite = dados.get('limite_watts')
 
@@ -250,7 +238,7 @@ def api_atualizar_usuario():
     tarifa_final = float(nova_tarifa) if nova_tarifa is not None else usuario['tarifa']
     limite_final = float(novo_limite) if novo_limite else usuario['limite_watts']
     senha_final = generate_password_hash(nova_senha) if nova_senha else usuario['senha']
-    cep_final = novo_cep if len(novo_cep) == 8 else usuario['cep']
+    cep_final = f"{cep_limpo[:5]}-{cep_limpo[5:]}" if len(cep_limpo) == 8 else usuario['cep']
 
     try:
         conn.execute('''
@@ -302,53 +290,35 @@ def api_limpar_leituras():
     return jsonify({'sucesso': True, 'mensagem': 'Histórico e consumo zerados com sucesso!'})
 
 
-# =====================================================
-# ROTAS DE PAINEL, ESTATÍSTICAS E TARIFAS
-# =====================================================
 @app.route('/api/tarifa-cep', methods=['GET'])
 def obter_tarifa_por_cep():
     global tarifa_global_kwh
-    cep = re.sub(r'\D', '', request.args.get('cep', ''))
-    if len(cep) != 8:
+    cep_raw = request.args.get('cep', '')
+    cep_limpo = re.sub(r'\D', '', cep_raw)
+    if len(cep_limpo) != 8:
         return jsonify({'erro': 'CEP inválido'}), 400
 
-    prefixo2 = int(cep[:2])
+    prefixo2 = int(cep_limpo[:2])
     if 30 <= prefixo2 <= 39:
-        uf_regra = 'MG'
-        empresa = 'CEMIG'
-        tarifa = 0.89
+        uf_regra, empresa, tarifa = 'MG', 'CEMIG', 0.89
     elif 1 <= prefixo2 <= 19:
-        uf_regra = 'SP'
-        empresa = 'CPFL / Enel SP'
-        tarifa = 0.83
+        uf_regra, empresa, tarifa = 'SP', 'CPFL / Enel SP', 0.83
     elif 20 <= prefixo2 <= 28:
-        uf_regra = 'RJ'
-        empresa = 'Light / Enel RJ'
-        tarifa = 1.05
+        uf_regra, empresa, tarifa = 'RJ', 'Light / Enel RJ', 1.05
     elif 80 <= prefixo2 <= 87:
-        uf_regra = 'PR'
-        empresa = 'COPEL'
-        tarifa = 0.81
+        uf_regra, empresa, tarifa = 'PR', 'COPEL', 0.81
     elif 88 <= prefixo2 <= 89:
-        uf_regra = 'SC'
-        empresa = 'CELESC'
-        tarifa = 0.73
+        uf_regra, empresa, tarifa = 'SC', 'CELESC', 0.73
     elif 90 <= prefixo2 <= 99:
-        uf_regra = 'RS'
-        empresa = 'CEEE / RGE'
-        tarifa = 0.88
+        uf_regra, empresa, tarifa = 'RS', 'CEEE / RGE', 0.88
     elif 40 <= prefixo2 <= 48:
-        uf_regra = 'BA'
-        empresa = 'Neoenergia Coelba'
-        tarifa = 0.94
+        uf_regra, empresa, tarifa = 'BA', 'Neoenergia Coelba', 0.94
     else:
-        uf_regra = 'BR'
-        empresa = 'Concessionária Nacional'
-        tarifa = 0.85
+        uf_regra, empresa, tarifa = 'BR', 'Concessionária Nacional', 0.85
 
     cidade = 'Região ' + uf_regra
     try:
-        r = requests.get(f'https://viacep.com.br/ws/{cep}/json/', timeout=2).json()
+        r = requests.get(f'https://viacep.com.br/ws/{cep_limpo}/json/', timeout=2).json()
         if 'localidade' in r and r['localidade']:
             cidade = r['localidade']
     except Exception:
@@ -359,7 +329,8 @@ def obter_tarifa_por_cep():
         'cidade': cidade,
         'uf': uf_regra,
         'empresa': empresa,
-        'tarifa_kwh': tarifa
+        'tarifa_kwh': tarifa,
+        'cep_formatado': f"{cep_limpo[:5]}-{cep_limpo[5:]}"
     })
 
 
@@ -370,26 +341,7 @@ def api_leituras():
         'SELECT corrente, potencia, timestamp FROM leituras ORDER BY id DESC LIMIT 50'
     ).fetchall()
     conn.close()
-    dados = [dict(l) for l in reversed(linhas)]
-    return jsonify(dados)
-
-
-@app.route('/api/simular-pico', methods=['POST'])
-def api_simular_pico():
-    global simulando_pico_feira
-    dados = request.get_json() or {}
-    simulando_pico_feira = dados.get('ativar', not simulando_pico_feira)
-
-    if simulando_pico_feira:
-        salvar_leitura(220.0, 6.82, 1500.0)
-    else:
-        salvar_leitura(220.0, 0.75, 165.0)
-
-    return jsonify({
-        'sucesso': True,
-        'simulando_pico': simulando_pico_feira,
-        'mensagem': 'Pico de carga ativado (1500W - 6.8A)!' if simulando_pico_feira else 'Carga restabelecida para nível normal.'
-    })
+    return jsonify([dict(l) for l in reversed(linhas)])
 
 
 @app.route('/api/stats')
@@ -430,8 +382,7 @@ def api_stats():
         'kwh_hoje': round(kwh_acumulado_total, 4),
         'custo_hoje': round(kwh_acumulado_total * tarifa_global_kwh, 2),
         'limite_alerta': limite_alerta_watts,
-        'sensor_conectado': sensor_conectado_real,
-        'simulando_pico': simulando_pico_feira
+        'sensor_conectado': sensor_conectado_real
     })
 
 
@@ -488,15 +439,6 @@ def home():
 
 if __name__ == '__main__':
     init_db()
-    try:
-        conn = get_db()
-        row = conn.execute('SELECT COUNT(*), AVG(potencia) FROM leituras').fetchone()
-        if row and row[0] > 0:
-            kwh_acumulado_total = round((row[1] * (row[0] * 3.0 / 3600.0)) / 1000.0, 4)
-        conn.close()
-    except Exception:
-        pass
-
     thread_serial = threading.Thread(target=ler_serial, daemon=True)
     thread_serial.start()
     app.run(host='0.0.0.0', port=5000, debug=False)
