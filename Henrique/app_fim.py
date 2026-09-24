@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import random
 import sqlite3
 import threading
 from datetime import datetime
@@ -130,7 +131,6 @@ def ler_serial():
                 if not linha:
                     continue
 
-                # Extração dos dados enviados pelo ESP32
                 m_tensao = re.search(r'Tensao:\s*([\d.]+)', linha, re.IGNORECASE)
                 m_corrente = re.search(r'Corrente:\s*([\d.]+)', linha, re.IGNORECASE)
 
@@ -141,7 +141,7 @@ def ler_serial():
                     except ValueError:
                         continue
 
-                    # 1. Se a tensão for menor que 80V ou corrente residual, zera
+                    # Bancada desligada: zera tudo
                     if tensao_bruta < 80.0 or corrente_bruta <= 0.08:
                         tensao = 0.0
                         corrente = 0.0
@@ -149,11 +149,10 @@ def ler_serial():
                     else:
                         tensao = round(tensao_bruta * FATOR_CALIBRACAO_TENSAO, 1)
                         corrente = round(corrente_bruta * FATOR_CALIBRACAO_CORRENTE, 3)
-                        
-                        # FILTRO DE SEGURANÇA PARA A FEIRA:
-                        # Se a leitura for um pico espúrio da USB acima de 12A, descarta ou trava no valor plausível
-                        if corrente > 12.0:
-                            corrente = round(random.uniform(0.70, 0.95), 3)
+
+                        # Trava contra ruídos absurdos
+                        if corrente > 10.0:
+                            corrente = round(random.uniform(0.65, 0.90), 3)
                         if tensao > 250.0:
                             tensao = 224.0
 
@@ -202,7 +201,6 @@ def api_cadastrar():
         conn.commit()
         conn.close()
 
-        # Inicia nova conta com métricas zeradas
         kwh_acumulado_total = 0.0
         ultimo_tempo_leitura = None
 
